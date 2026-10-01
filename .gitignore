@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js Build Outputs
+.next/
+out/
+
+# TypeScript / Node Outputs
+dist/
+build/
+*.tsbuildinfo
+
+# PostgreSQL Local Cluster Data
+.pgdata/
+
+# Environment Variables
+.env
+.env*.local
+.env.production
+.env.development
+
+# Logs & Debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Database Backups
+scripts/backups/*.sql
+
+# System & OS Files
+.DS_Store
+Thumbs.db
+
+# Testing & Coverage
+coverage/
+.vitest/
+
+# IDE / Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Turbo / Build Caches
+.turbo/

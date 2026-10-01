@@ -1,0 +1,15 @@
+{
+  "name": "event-platform-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter event-platform-api dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm --recursive run build",
+    "test": "pnpm --filter event-platform-api test",
+    "test:concurrency": "pnpm --filter event-platform-api test",
+    "test:20-bugs": "pnpm --filter event-platform-api exec tsx ../../scripts/test-20-bugs.ts",
+    "benchmark": "pnpm --filter event-platform-api exec tsx ../../scripts/concurrency-benchmark.ts",
+    "load-test": "powershell -ExecutionPolicy Bypass -File ./load-test/run-k6.ps1"
+  }
+}

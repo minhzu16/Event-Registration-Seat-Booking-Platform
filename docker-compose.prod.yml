@@ -1,0 +1,65 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: seatlock-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+  db:
+    image: postgres:16-alpine
+    container_name: seatlock-prod-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: event_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secureproductionpassword2026}
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d event_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    deploy:
+      replicas: 2 # 2 concurrent backend instances demonstrating distributed locking
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-secureproductionpassword2026}@db:5432/event_platform
+      JWT_SECRET: ${JWT_SECRET:-super-secret-production-ready-jwt-key}
+      QR_HMAC_SECRET: ${QR_HMAC_SECRET:-super-secret-hmac-qr-signing-key}
+      BOOKING_STRATEGY: pessimistic
+      DEFAULT_HOLD_MINUTES: 10
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: /api
+    depends_on:
+      - api
+
+volumes:
+  pgdata_prod:
+  caddy_data:
+  caddy_config:

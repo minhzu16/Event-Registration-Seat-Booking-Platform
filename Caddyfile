@@ -1,0 +1,36 @@
+# Caddyfile - Reverse Proxy & Automatic HTTPS
+{
+    # Global options
+    auto_https off # Set to 'on' or omit for production domain
+}
+
+:80 {
+    # API endpoints
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy api:4000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Frontend pages and assets
+    handle {
+        reverse_proxy web:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Enable gzip & zstd compression
+    encode zstd gzip
+
+    # Security headers
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
