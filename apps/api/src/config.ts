@@ -11,6 +11,8 @@ const envSchema = z.object({
   QR_HMAC_SECRET: z.string().default('hmac-qr-signing-key-production-ready-2026'),
   BOOKING_STRATEGY: z.enum(['pessimistic', 'conditional', 'naive']).default('pessimistic'),
   DEFAULT_HOLD_MINUTES: z.coerce.number().default(10),
+  LOG_LEVEL: z.string().default('info'),
+  NODE_ENV: z.string().default('development'),
 });
 
 export const config = envSchema.parse(process.env);

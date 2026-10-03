@@ -1,9 +1,17 @@
 import { query, withTransaction } from '../database.js';
 import { realtimeHub } from './realtime.js';
+import { logger } from '../logger.js';
 
 let workerInterval: NodeJS.Timeout | null = null;
+let isProcessing = false;
 
 export async function processExpiredHolds(): Promise<number> {
+  if (isProcessing) {
+    logger.debug('[Worker] Previous run still in progress, skipping tick.');
+    return 0;
+  }
+
+  isProcessing = true;
   try {
     const res = await query<{ id: string; session_id: string }>(
       `UPDATE event_seats
@@ -13,7 +21,7 @@ export async function processExpiredHolds(): Promise<number> {
     );
 
     if (res.rowCount && res.rowCount > 0) {
-      console.log(`[Worker] Auto-released ${res.rowCount} expired seats.`);
+      logger.info({ releasedCount: res.rowCount }, '[Worker] Auto-released expired seats');
       
       // Group by session to broadcast
       const bySession = new Map<string, string[]>();
@@ -47,8 +55,10 @@ export async function processExpiredHolds(): Promise<number> {
 
     return res.rowCount || 0;
   } catch (error) {
-    console.error('[Worker] Error processing expired holds', error);
+    logger.error({ err: error }, '[Worker] Error processing expired holds');
     return 0;
+  } finally {
+    isProcessing = false;
   }
 }
 
@@ -107,7 +117,10 @@ export async function triggerWaitlistOffer(sessionId: string): Promise<void> {
           [holdId, offerExpiry, entry.id]
         );
 
-        console.log(`[Waitlist] Created offer hold ${holdId} for user ${entry.user_id} on seat ${seatId}`);
+        logger.info(
+          { holdId, userId: entry.user_id, seatId, sessionId },
+          '[Waitlist] Created offer hold for user'
+        );
         realtimeHub.broadcast(sessionId, 'seat_held', {
           seatIds: [seatId],
           holdId,
@@ -116,13 +129,13 @@ export async function triggerWaitlistOffer(sessionId: string): Promise<void> {
       }
     });
   } catch (error) {
-    console.error('[Waitlist] Error allocating waitlist offer', error);
+    logger.error({ err: error, sessionId }, '[Waitlist] Error allocating waitlist offer');
   }
 }
 
 export function startBackgroundWorker(intervalMs: number = 10000): void {
   if (workerInterval) return;
-  console.log(`[Worker] Started background cleaner (every ${intervalMs / 1000}s)`);
+  logger.info({ intervalSeconds: intervalMs / 1000 }, '[Worker] Started background cleaner');
   workerInterval = setInterval(async () => {
     await processExpiredHolds();
   }, intervalMs);
@@ -132,6 +145,6 @@ export function stopBackgroundWorker(): void {
   if (workerInterval) {
     clearInterval(workerInterval);
     workerInterval = null;
-    console.log('[Worker] Stopped background cleaner');
+    logger.info('[Worker] Stopped background cleaner');
   }
 }

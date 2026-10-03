@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
+import closeWithGrace from 'close-with-grace';
 import { config } from './config.js';
+import { logger } from './logger.js';
 import { pool, query, withTransaction } from './database.js';
 import authRoutes from './routes/auth.routes.js';
 import eventsRoutes from './routes/events.routes.js';
@@ -11,6 +13,7 @@ import waitlistRoutes from './routes/waitlist.routes.js';
 import checkinRoutes from './routes/checkin.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import { startBackgroundWorker, stopBackgroundWorker } from './services/worker.js';
 
 const app = express();
@@ -18,13 +21,21 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// Request logging middleware
+// Request structured logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
     if (req.path !== '/health') {
-      console.log(`[HTTP] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
+      logger.info(
+        {
+          method: req.method,
+          path: req.originalUrl,
+          statusCode: res.statusCode,
+          durationMs: duration,
+        },
+        `HTTP ${req.method} ${req.originalUrl}`
+      );
     }
   });
   next();
@@ -41,6 +52,7 @@ app.get('/health', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
+    logger.error({ err }, '[Health] Check failed');
     res.status(500).json({ status: 'DOWN', error: err.message });
   }
 });
@@ -54,6 +66,9 @@ app.use('/', waitlistRoutes);
 app.use('/', checkinRoutes);
 app.use('/', reportsRoutes);
 app.use('/', adminRoutes);
+
+// Centralized error handler
+app.use(errorHandler);
 
 // Database Seeder
 async function seedDefaultData() {
@@ -251,33 +266,40 @@ async function seedDefaultData() {
         [sess2Id]
       );
 
-      console.log('[Seed] Seeding completed successfully!');
+      logger.info('[Seed] Seeding completed successfully!');
     });
   } catch (error) {
-    console.error('[Seed Error]', error);
+    logger.error({ err: error }, '[Seed Error]');
   }
 }
 
 // Start Server
 const server = app.listen(config.PORT, async () => {
-  console.log(`🚀 [API] Event Platform API running on http://localhost:${config.PORT}`);
-  console.log(`📊 [API] Database connected to ${config.DATABASE_URL}`);
-  console.log(`🔒 [API] Default booking concurrency strategy: ${config.BOOKING_STRATEGY}`);
+  logger.info(
+    { port: config.PORT, db: config.DATABASE_URL, strategy: config.BOOKING_STRATEGY },
+    '🚀 Event Platform API started'
+  );
 
   await seedDefaultData();
   startBackgroundWorker(10000);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
-
-function shutdown() {
-  console.log('[API] Gracefully shutting down...');
+// Production-ready graceful shutdown via close-with-grace
+closeWithGrace({ delay: 10000 }, async ({ signal, err }) => {
+  if (err) {
+    logger.fatal({ err }, '[API] Unhandled error triggered shutdown');
+  }
+  logger.info({ signal }, '[API] Gracefully shutting down...');
   stopBackgroundWorker();
-  server.close(async () => {
-    await pool.end();
-    console.log('[API] Closed HTTP server and PostgreSQL pool.');
-    process.exit(0);
+
+  if (typeof (server as any).closeIdleConnections === 'function') {
+    (server as any).closeIdleConnections();
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((serverErr) => (serverErr ? reject(serverErr) : resolve()));
   });
-}
+
+  await pool.end();
+  logger.info('[API] Closed HTTP server and drained PostgreSQL pool cleanly.');
+});

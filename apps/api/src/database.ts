@@ -1,5 +1,7 @@
 import pg from 'pg';
 import { config } from './config.js';
+import { logger } from './logger.js';
+import { DatabaseError } from './errors.js';
 
 const { Pool } = pg;
 
@@ -11,7 +13,7 @@ export const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('[DB] Unexpected error on idle client', err);
+  logger.error({ err }, '[DB] Unexpected error on idle client');
 });
 
 export async function query<T extends pg.QueryResultRow = any>(
@@ -19,12 +21,23 @@ export async function query<T extends pg.QueryResultRow = any>(
   params?: any[]
 ): Promise<pg.QueryResult<T>> {
   const start = Date.now();
-  const res = await pool.query<T>(text, params);
-  const duration = Date.now() - start;
-  if (duration > 150) {
-    console.warn(`[DB SLOW QUERY ${duration}ms]`, text.substring(0, 100));
+  try {
+    const res = await pool.query<T>(text, params);
+    const duration = Date.now() - start;
+    if (duration > 150) {
+      logger.warn(
+        { query: text.substring(0, 150), durationMs: duration, rowCount: res.rowCount },
+        '[DB SLOW QUERY]'
+      );
+    }
+    return res;
+  } catch (error: any) {
+    logger.error(
+      { query: text.substring(0, 150), params, err: error.message },
+      '[DB Query Error]'
+    );
+    throw new DatabaseError(error.message, error);
   }
-  return res;
 }
 
 export async function withTransaction<T>(
@@ -33,11 +46,17 @@ export async function withTransaction<T>(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Guard against runaway locked transactions
+    await client.query('SET statement_timeout = 10000');
     const result = await callback(client);
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rbErr) {
+      logger.error({ err: rbErr }, '[DB] Rollback failed');
+    }
     throw error;
   } finally {
     client.release();
