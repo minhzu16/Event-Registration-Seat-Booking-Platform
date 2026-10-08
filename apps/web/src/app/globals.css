@@ -1,84 +1,92 @@
 @import "tailwindcss";
 
-:root {
-  --background: #090d16;
-  --foreground: #f8fafc;
-  --card-bg: rgba(15, 23, 42, 0.75);
-  --border-color: rgba(255, 255, 255, 0.1);
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --accent: #06b6d4;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+@layer base {
+  :root {
+    --background: #080b11;
+    --foreground: #f8fafc;
+    --surface-base: #0c101a;
+    --surface-raised: #131927;
+    --surface-elevated: #1a2336;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --primary: #f59e0b;        /* Stage spotlight amber */
+    --primary-hover: #d97706;
+    --cyan-live: #06b6d4;      /* Realtime SSE pulse */
+    --emerald-safe: #10b981;   /* Confirmed booking */
+    --rose-conflict: #ef4444;  /* Sold / locked */
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.08), transparent 70%),
+      radial-gradient(ellipse 60% 30% at 50% 100%, rgba(6, 182, 212, 0.05), transparent 70%);
+    background-attachment: fixed;
+    letter-spacing: -0.01em;
+  }
 }
 
-body {
+/* Distinctive Stage & Ticket Geometry */
+.stage-curved {
+  position: relative;
+  border-radius: 100% 100% 0 0 / 40px 40px 0 0;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.02) 100%);
+  border-top: 2px solid rgba(245, 158, 11, 0.6);
+  box-shadow: 0 -12px 32px -8px rgba(245, 158, 11, 0.25);
+}
+
+.ticket-pass {
+  background: #0f1523;
+  border: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.ticket-pass::before,
+.ticket-pass::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
   background-color: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
-  background-image: 
-    radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-    radial-gradient(at 85% 85%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
-  background-attachment: fixed;
+  border-radius: 50%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid var(--border-subtle);
+  z-index: 10;
 }
 
-/* Glassmorphism Utilities */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+.ticket-pass::before {
+  left: -9px;
+  clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%);
 }
 
-.glass-card {
-  background: rgba(30, 41, 59, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.glass-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(99, 102, 241, 0.4);
-  box-shadow: 0 12px 30px -10px rgba(99, 102, 241, 0.25);
+.ticket-pass::after {
+  right: -9px;
+  clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: #0c101a;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.4);
-  border-radius: 4px;
+  background: #243048;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.7);
+  background: #3b4e72;
 }
 
-/* Animations */
-@keyframes pulse-fast {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.08); }
-}
-
-.animate-pulse-fast {
-  animation: pulse-fast 1s infinite;
-}
-
-@keyframes glow {
-  0%, 100% { filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.7)); }
-  50% { filter: drop-shadow(0 0 15px rgba(16, 185, 129, 1)); }
-}
-
-.glow-success {
-  animation: glow 1.5s infinite;
+/* Focused Accessible Outline */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

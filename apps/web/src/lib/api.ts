@@ -57,6 +57,7 @@ export interface Seat {
   ticketTypeId: string;
   isHeldByMe?: boolean;
   holdExpiresAt?: string;
+  holdId?: string;
 }
 
 export interface Ticket {

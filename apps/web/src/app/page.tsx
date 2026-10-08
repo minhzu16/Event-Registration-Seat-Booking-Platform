@@ -6,13 +6,9 @@ import {
   Search,
   Calendar,
   MapPin,
-  Users,
   Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Zap,
-  Activity,
   Ticket,
+  Zap,
 } from 'lucide-react';
 import { fetchApi, Event } from '@/lib/api';
 
@@ -56,92 +52,88 @@ export default function HomePage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       {/* Hero Section */}
-      <section className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-indigo-950/40 via-slate-900/60 to-slate-950/80 p-8 sm:p-14 overflow-hidden mb-12 shadow-2xl">
-        <div className="absolute top-0 right-0 -mt-12 -mr-12 h-96 w-96 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -mb-12 -ml-12 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+      <section className="relative rounded-2xl border border-white/[0.08] bg-[#0c101a] p-8 sm:p-12 mb-10 overflow-hidden">
+        {/* Subtle Stage Lighting Ambiance */}
+        <div className="absolute top-0 right-1/4 -mt-16 h-80 w-80 rounded-full bg-amber-500/[0.06] blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-10 -mb-16 h-64 w-64 rounded-full bg-cyan-500/[0.04] blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300 backdrop-blur-md mb-6">
-            <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-            <span>High-Demand Ticket Drops & Schedulers</span>
-          </div>
-
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight">
-            Reserve Seats with{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-cyan-300 to-emerald-400">
-              Zero Collisions
-            </span>
-          </h1>
-
-          <p className="mt-4 text-base sm:text-lg text-slate-300 leading-relaxed">
-            Experience ultra-fast ticket selection with interactive SVG seating maps, 10-minute holds,
-            realtime status streams, and rock-solid PostgreSQL row-level locks that prevent double booking.
+        <div className="relative z-10 max-w-2xl">
+          <p className="text-xs font-semibold text-amber-400 tracking-wide mb-3">
+            High-concurrency ticket dispatch & seat reservation
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-4">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+            Reserved seating and live ticket drops without collision.
+          </h1>
+
+          <p className="mt-4 text-sm sm:text-base text-slate-300 leading-relaxed">
+            Interactive amphitheater seating maps with 10-minute locks, live inventory sync over server-sent events, and database row-level locking that prevents double-booking.
+          </p>
+
+          <div className="mt-7 flex flex-wrap items-center gap-3">
             <a
-              href="#events-list"
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 hover:from-indigo-500 hover:to-indigo-400 transition transform hover:-translate-y-0.5"
+              href="#events-catalog"
+              className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition"
             >
               <Ticket className="h-4 w-4" />
-              Explore Events
+              Browse events
             </a>
             <Link
               href="/simulate"
-              className="flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-950/30 px-6 py-3.5 text-sm font-bold text-cyan-300 backdrop-blur-md hover:bg-cyan-900/40 hover:border-cyan-400/50 transition transform hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/[0.12] bg-[#141b29] px-5 py-2.5 text-xs font-medium text-slate-200 hover:border-white/[0.25] transition"
             >
               <Zap className="h-4 w-4 text-cyan-400" />
-              Launch Concurrency Lab
+              Concurrency stress lab
             </Link>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-white/10 pt-6">
+          {/* Core System Properties */}
+          <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-white/[0.08] pt-6">
             <div>
-              <p className="text-2xl font-black text-white">0%</p>
-              <p className="text-xs text-slate-400">Double-Booking Rate</p>
+              <p className="text-xl font-bold text-white">0</p>
+              <p className="text-xs text-slate-400 mt-0.5">Duplicate bookings</p>
             </div>
             <div>
-              <p className="text-2xl font-black text-cyan-400">&lt; 300ms</p>
-              <p className="text-xs text-slate-400">P95 Hold Latency</p>
+              <p className="text-xl font-bold text-cyan-400">&lt; 300 ms</p>
+              <p className="text-xs text-slate-400 mt-0.5">Seat hold latency</p>
             </div>
             <div>
-              <p className="text-2xl font-black text-emerald-400">10 Min</p>
-              <p className="text-xs text-slate-400">Seat Hold Countdown</p>
+              <p className="text-xl font-bold text-amber-400">10 min</p>
+              <p className="text-xs text-slate-400 mt-0.5">Temporary hold window</p>
             </div>
             <div>
-              <p className="text-2xl font-black text-indigo-400">HMAC-256</p>
-              <p className="text-xs text-slate-400">Tamper-Proof QR Code</p>
+              <p className="text-xl font-bold text-emerald-400">HMAC-256</p>
+              <p className="text-xs text-slate-400 mt-0.5">Signed pass verification</p>
             </div>
           </div>
         </div>
       </section>
 
       {/* Search & Filter Toolbar */}
-      <div id="events-list" className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div id="events-catalog" className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search events, venues, topics..."
+            placeholder="Search events, halls, topics..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-400 backdrop-blur-md focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="w-full rounded-lg border border-white/[0.1] bg-[#0c101a] py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
           />
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Categories */}
-          <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-900/80 p-1 backdrop-blur-md">
+          <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-[#0c101a] p-1">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                className={`rounded px-2.5 py-1 text-xs font-medium transition ${
                   selectedCategory === cat
-                    ? 'bg-indigo-600 text-white shadow'
+                    ? 'bg-[#1a2336] text-amber-400 font-semibold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -151,121 +143,123 @@ export default function HomePage() {
           </div>
 
           {/* Mode */}
-          <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-900/80 p-1 backdrop-blur-md">
+          <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-[#0c101a] p-1">
             <button
               onClick={() => setSelectedMode('ALL')}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                selectedMode === 'ALL' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
+              className={`rounded px-2.5 py-1 text-xs font-medium transition ${
+                selectedMode === 'ALL' ? 'bg-[#1a2336] text-white font-semibold' : 'text-slate-400 hover:text-white'
               }`}
             >
-              All Types
+              All formats
             </button>
             <button
               onClick={() => setSelectedMode('RESERVED')}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                selectedMode === 'RESERVED' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`rounded px-2.5 py-1 text-xs font-medium transition ${
+                selectedMode === 'RESERVED' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Seat Map
+              Reserved seats
             </button>
             <button
               onClick={() => setSelectedMode('GA')}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                selectedMode === 'GA' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`rounded px-2.5 py-1 text-xs font-medium transition ${
+                selectedMode === 'GA' ? 'bg-cyan-500/20 text-cyan-300 font-semibold' : 'text-slate-400 hover:text-white'
               }`}
             >
-              General Adm.
+              General admission
             </button>
           </div>
         </div>
       </div>
 
-      {/* Events Grid */}
+      {/* Events List */}
       {loading ? (
-        <div className="py-24 text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
-          <p className="mt-3 text-sm text-slate-400">Loading live events inventory...</p>
+        <div className="py-20 text-center">
+          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+          <p className="mt-3 text-xs text-slate-400">Loading scheduled events...</p>
         </div>
       ) : filteredEvents.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-12 text-center backdrop-blur-md">
-          <Ticket className="mx-auto h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-base font-semibold text-white">No matching events found</h3>
-          <p className="mt-1 text-sm text-slate-400">Try adjusting your search filters or create an event in Organiser Studio.</p>
+        <div className="rounded-xl border border-white/[0.08] bg-[#0c101a] p-12 text-center">
+          <Ticket className="mx-auto h-10 w-10 text-slate-500" />
+          <h3 className="mt-3 text-sm font-semibold text-white">No matching events found</h3>
+          <p className="mt-1 text-xs text-slate-400">Try clearing filters or search terms.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredEvents.map((ev) => {
             const firstSession = ev.sessions && ev.sessions[0];
-            const startDate = firstSession ? new Date(firstSession.starts_at).toLocaleDateString(undefined, {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            }) : 'TBD';
+            const startDate = firstSession
+              ? new Date(firstSession.starts_at).toLocaleDateString('vi-VN', {
+                  weekday: 'short',
+                  month: 'numeric',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : 'Unscheduled';
 
             return (
               <div
                 key={ev.id}
-                className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 shadow-lg backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-500/10"
+                className="ticket-pass flex flex-col justify-between overflow-hidden rounded-xl bg-[#0f1523] border border-white/[0.08] transition hover:border-amber-400/30"
               >
-                {/* Banner Image */}
-                <div className="relative h-48 w-full overflow-hidden bg-slate-800">
+                {/* Banner Section */}
+                <div className="relative h-44 w-full overflow-hidden bg-[#090d16]">
                   {ev.banner_url ? (
                     <img
                       src={ev.banner_url}
                       alt={ev.title}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-tr from-slate-900 to-indigo-950">
-                      <Ticket className="h-12 w-12 text-indigo-400/40" />
+                    <div className="flex h-full w-full items-center justify-center bg-[#0e1422]">
+                      <Ticket className="h-10 w-10 text-slate-600" />
                     </div>
                   )}
                   <div className="absolute top-3 left-3 flex gap-2">
-                    <span className="rounded-full bg-slate-950/80 px-2.5 py-1 text-[11px] font-bold text-slate-200 backdrop-blur-md border border-white/10">
+                    <span className="rounded bg-[#080b11]/90 px-2 py-0.5 text-[10px] font-medium text-slate-300 border border-white/[0.1]">
                       {ev.category}
                     </span>
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold backdrop-blur-md border ${
+                      className={`rounded px-2 py-0.5 text-[10px] font-medium border ${
                         ev.seating_mode === 'RESERVED'
-                          ? 'bg-indigo-600/80 text-white border-indigo-400/30'
-                          : 'bg-pink-600/80 text-white border-pink-400/30'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                          : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                       }`}
                     >
-                      {ev.seating_mode === 'RESERVED' ? 'Sơ đồ ghế' : 'Vé tự do (GA)'}
+                      {ev.seating_mode === 'RESERVED' ? 'Reserved seating' : 'General admission'}
                     </span>
                   </div>
                 </div>
 
                 {/* Content */}
-                <div className="flex flex-1 flex-col p-5">
-                  <h3 className="text-lg font-bold text-white group-hover:text-indigo-400 transition line-clamp-1">
+                <div className="flex flex-1 flex-col p-4">
+                  <h3 className="text-base font-bold text-white line-clamp-1">
                     {ev.title}
                   </h3>
 
-                  <p className="mt-2 text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                    {ev.description || 'Join us for this premier live experience.'}
+                  <p className="mt-1.5 text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                    {ev.description || 'Premier live performance.'}
                   </p>
 
-                  <div className="mt-4 space-y-2 border-t border-white/5 pt-3 text-xs text-slate-300">
+                  <div className="mt-3.5 space-y-1.5 border-t border-white/[0.06] pt-3 text-xs text-slate-300">
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                      <Calendar className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                       <span className="truncate">{startDate}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                       <span className="truncate">{ev.venue_name}</span>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+                  <div className="mt-4 flex items-center justify-between border-t border-white/[0.08] pt-3">
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Policy</span>
-                      <span className="text-xs font-semibold text-emerald-400">
-                        {ev.refund_percent}% Hoàn tiền ({ev.cancel_deadline_hours}h)
-                      </span>
+                      <p className="text-[10px] text-slate-400">Refund policy</p>
+                      <p className="text-xs font-medium text-emerald-400">
+                        {ev.refund_percent}% up to {ev.cancel_deadline_hours}h prior
+                      </p>
                     </div>
 
                     <Link
@@ -274,10 +268,9 @@ export default function HomePage() {
                           ? `/events/${ev.id}/seats?sessionId=${firstSession.id}`
                           : `/events/${ev.id}`
                       }
-                      className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 transition"
+                      className="rounded-lg bg-amber-500 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition"
                     >
-                      {ev.seating_mode === 'RESERVED' ? 'Chọn ghế' : 'Đặt vé'}
-                      <ArrowRight className="h-3.5 w-3.5" />
+                      {ev.seating_mode === 'RESERVED' ? 'Select seats' : 'Get tickets'}
                     </Link>
                   </div>
                 </div>
