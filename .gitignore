@@ -46,3 +46,8 @@ coverage/
 
 # Turbo / Build Caches
 .turbo/
+
+# AI Agent Temporary Session Files
+*argon*.md
+plan_*.md
+

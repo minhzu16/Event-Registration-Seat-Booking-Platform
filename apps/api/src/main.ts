@@ -14,12 +14,14 @@ import checkinRoutes from './routes/checkin.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { securityHeadersMiddleware, createRateLimiter } from './middleware/security.js';
 import { startBackgroundWorker, stopBackgroundWorker } from './services/worker.js';
 
-const app = express();
+export const app = express();
 
+app.use(securityHeadersMiddleware);
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // Request structured logging middleware
 app.use((req, res, next) => {
@@ -57,8 +59,58 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Mount modular routes
-app.use('/auth', authRoutes);
+// Production Observability: Prometheus Metrics Endpoint (OpenTelemetry / Prometheus Scraper compatible)
+app.get('/metrics', async (req, res) => {
+  try {
+    const mem = process.memoryUsage();
+    const activeHoldsRes = await query(`SELECT count(*) as count FROM holds WHERE expires_at > now()`);
+    const activeHolds = Number(activeHoldsRes.rows[0]?.count || 0);
+
+    const metrics = [
+      '# HELP seatlock_uptime_seconds Process uptime in seconds.',
+      '# TYPE seatlock_uptime_seconds gauge',
+      `seatlock_uptime_seconds ${process.uptime().toFixed(2)}`,
+      '',
+      '# HELP seatlock_memory_rss_bytes Resident set size in bytes.',
+      '# TYPE seatlock_memory_rss_bytes gauge',
+      `seatlock_memory_rss_bytes ${mem.rss}`,
+      '',
+      '# HELP seatlock_memory_heap_used_bytes Heap memory used in bytes.',
+      '# TYPE seatlock_memory_heap_used_bytes gauge',
+      `seatlock_memory_heap_used_bytes ${mem.heapUsed}`,
+      '',
+      '# HELP seatlock_db_pool_total_connections Total pool connection limit.',
+      '# TYPE seatlock_db_pool_total_connections gauge',
+      `seatlock_db_pool_total_connections ${pool.totalCount}`,
+      '',
+      '# HELP seatlock_db_pool_idle_connections Idle connections in pool.',
+      '# TYPE seatlock_db_pool_idle_connections gauge',
+      `seatlock_db_pool_idle_connections ${pool.idleCount}`,
+      '',
+      '# HELP seatlock_db_pool_waiting_requests Client queries waiting for a connection.',
+      '# TYPE seatlock_db_pool_waiting_requests gauge',
+      `seatlock_db_pool_waiting_requests ${pool.waitingCount}`,
+      '',
+      '# HELP seatlock_active_holds_total Number of currently active non-expired seat holds.',
+      '# TYPE seatlock_active_holds_total gauge',
+      `seatlock_active_holds_total ${activeHolds}`,
+      '',
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.send(metrics);
+  } catch (err: any) {
+    res.status(500).send(`# Error generating metrics: ${err.message}`);
+  }
+});
+
+// Mount modular routes with security rate limiting
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 120,
+  message: 'Too many authentication attempts. Please try again later.',
+});
+app.use('/auth', authLimiter, authRoutes);
 app.use('/', eventsRoutes);
 app.use('/', holdsRoutes);
 app.use('/', bookingsRoutes);

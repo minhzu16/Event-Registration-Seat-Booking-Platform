@@ -4,10 +4,11 @@ const API_BASE = 'http://localhost:4000';
 
 describe('Concurrency & Seat Hold Integrity Tests', () => {
   it('Pessimistic lock: 100 concurrent requests for 5 seats -> exactly 5 succeed, 95 receive 409 conflict, 0 double booking', async () => {
-    // 1. Fetch first event session
+    // 1. Fetch reserved event session
     const eventsRes = await fetch(`${API_BASE}/events`).then((r) => r.json());
     expect(eventsRes.events.length).toBeGreaterThan(0);
-    const session = eventsRes.events[0].sessions[0];
+    const reservedEvent = eventsRes.events.find((e: any) => e.seating_mode === 'RESERVED') || eventsRes.events[0];
+    const session = reservedEvent.sessions[0];
 
     // 2. Fetch seats
     const seatsRes = await fetch(`${API_BASE}/sessions/${session.id}/seats`).then((r) => r.json());
@@ -35,7 +36,8 @@ describe('Concurrency & Seat Hold Integrity Tests', () => {
 
   it('Conditional compare-and-set: 100 concurrent requests -> exactly 5 succeed, 95 receive 409 conflict, 0 double booking', async () => {
     const eventsRes = await fetch(`${API_BASE}/events`).then((r) => r.json());
-    const session = eventsRes.events[0].sessions[0];
+    const reservedEvent = eventsRes.events.find((e: any) => e.seating_mode === 'RESERVED') || eventsRes.events[0];
+    const session = reservedEvent.sessions[0];
     const seatsRes = await fetch(`${API_BASE}/sessions/${session.id}/seats`).then((r) => r.json());
     const targetSeatIds = seatsRes.seats.slice(0, 5).map((s: any) => s.id);
 
@@ -59,7 +61,8 @@ describe('Concurrency & Seat Hold Integrity Tests', () => {
 
   it('Integrity query returns 0 violations on session', async () => {
     const eventsRes = await fetch(`${API_BASE}/events`).then((r) => r.json());
-    const session = eventsRes.events[0].sessions[0];
+    const reservedEvent = eventsRes.events.find((e: any) => e.seating_mode === 'RESERVED') || eventsRes.events[0];
+    const session = reservedEvent.sessions[0];
 
     const integrityRes = await fetch(`${API_BASE}/admin/integrity/${session.id}`).then((r) => r.json());
     expect(integrityRes.status).toBe('PASSED');

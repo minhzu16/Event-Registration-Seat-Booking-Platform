@@ -10,6 +10,10 @@ import {
   AlertTriangle,
   QrCode,
   RefreshCw,
+  ShieldCheck,
+  Clock,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import { fetchApi, Booking } from '@/lib/api';
 
@@ -19,6 +23,62 @@ export default function MyBookingsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  // SafeTix™ Dynamic Rolling Pass state (DICE / Ticketmaster pattern)
+  const [activeRollingTicket, setActiveRollingTicket] = useState<{
+    id: string;
+    attendeeName: string;
+    tierName: string;
+    seatInfo?: string;
+    rollingCode: string;
+    qrDataUrl: string;
+    remainingSeconds: number;
+  } | null>(null);
+  const [rollingLoading, setRollingLoading] = useState(false);
+
+  useEffect(() => {
+    if (!activeRollingTicket) return;
+
+    const timer = setInterval(() => {
+      setActiveRollingTicket((prev) => {
+        if (!prev) return null;
+        if (prev.remainingSeconds <= 1) {
+          // Time to refresh rolling token
+          fetchRollingPass(prev.id, prev.attendeeName, prev.tierName, prev.seatInfo);
+          return { ...prev, remainingSeconds: 15 };
+        }
+        return { ...prev, remainingSeconds: prev.remainingSeconds - 1 };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeRollingTicket?.id]);
+
+  async function fetchRollingPass(ticketId: string, attendeeName: string, tierName: string, seatInfo?: string) {
+    try {
+      setRollingLoading(true);
+      const res = await fetchApi<{
+        ticketId: string;
+        rollingCode: string;
+        qrDataUrl: string;
+        remainingSeconds: number;
+      }>(`/tickets/${ticketId}/rolling-pass`);
+
+      setActiveRollingTicket({
+        id: ticketId,
+        attendeeName,
+        tierName,
+        seatInfo,
+        rollingCode: res.rollingCode,
+        qrDataUrl: res.qrDataUrl,
+        remainingSeconds: res.remainingSeconds || 15,
+      });
+    } catch (err) {
+      console.error('Failed to load SafeTix pass', err);
+    } finally {
+      setRollingLoading(false);
+    }
+  }
 
   useEffect(() => {
     loadBookings();
@@ -215,7 +275,7 @@ export default function MyBookingsPage() {
                               <p className="text-xs text-slate-400">General admission</p>
                             )}
 
-                            <div className="pt-2">
+                            <div className="pt-2 flex flex-wrap items-center gap-2">
                               {isCheckedIn ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
                                   <CheckCircle2 className="h-3.5 w-3.5" /> Checked in
@@ -223,7 +283,21 @@ export default function MyBookingsPage() {
                               ) : isCancelled ? (
                                 <span className="text-[11px] text-rose-400">Cancelled pass</span>
                               ) : (
-                                <span className="text-[11px] text-slate-400">Ready for scan</span>
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      const seatLabel = t.seatSection
+                                        ? `${t.seatSection} • Row ${t.seatRow}-${t.seatNumber}`
+                                        : 'General Admission';
+                                      fetchRollingPass(t.id, t.attendeeName, t.ticketTypeName, seatLabel);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-cyan-500/30 bg-cyan-950/30 px-2.5 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-900/40 hover:border-cyan-400/50 transition shadow-sm"
+                                  >
+                                    <ShieldCheck className="h-3.5 w-3.5 text-cyan-400" />
+                                    SafeTix™ Live Pass
+                                  </button>
+                                  <span className="text-[10px] text-slate-500 hidden sm:inline">Rolling code</span>
+                                </>
                               )}
                             </div>
                           </div>
@@ -266,6 +340,74 @@ export default function MyBookingsPage() {
               >
                 Keep booking
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SafeTix™ Rolling Pass Modal (Anti-Scalping Dynamic Barcode) */}
+      {activeRollingTicket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+          <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-cyan-500/30 bg-[#0b101c] p-6 shadow-[0_0_50px_rgba(6,182,212,0.15)] text-center">
+            {/* Close Button */}
+            <button
+              onClick={() => setActiveRollingTicket(null)}
+              className="absolute right-4 top-4 rounded-full p-1 text-slate-400 hover:bg-white/[0.1] hover:text-white transition"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {/* Header Badge */}
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-950/60 px-3 py-1 text-[11px] font-bold text-cyan-300 tracking-wide uppercase shadow-inner mb-3">
+              <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+              SafeTix™ Verified Pass
+            </div>
+
+            <h3 className="text-base font-bold text-white">{activeRollingTicket.attendeeName}</h3>
+            <p className="text-xs text-amber-300 font-medium">{activeRollingTicket.tierName}</p>
+            {activeRollingTicket.seatInfo && (
+              <p className="text-xs text-slate-400 font-mono mt-0.5">{activeRollingTicket.seatInfo}</p>
+            )}
+
+            {/* Interactive QR Display with Scanline */}
+            <div className="relative mx-auto my-5 flex h-60 w-60 items-center justify-center rounded-2xl border-2 border-cyan-500/40 bg-white p-3 shadow-2xl overflow-hidden">
+              {/* Scanline Animation */}
+              <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent animate-bounce opacity-80 pointer-events-none" />
+
+              {activeRollingTicket.qrDataUrl ? (
+                <img
+                  src={activeRollingTicket.qrDataUrl}
+                  alt="Dynamic SafeTix Pass"
+                  className="h-full w-full object-contain select-none"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+                </div>
+              )}
+            </div>
+
+            {/* Circular Progress Countdown */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400 px-2 font-mono">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-cyan-400" /> Rotating barcode
+                </span>
+                <span className="font-bold text-cyan-300">
+                  Refreshes in {activeRollingTicket.remainingSeconds}s
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-1000 ease-linear"
+                  style={{ width: `${(activeRollingTicket.remainingSeconds / 15) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Fraud & Screenshot Warning */}
+            <div className="mt-5 rounded-lg border border-amber-500/20 bg-amber-950/20 p-2.5 text-[11px] text-amber-300 leading-snug">
+              ⚡ <strong>Anti-Screenshot Protection:</strong> This QR code regenerates cryptographically every 15 seconds. Screenshots will be rejected at the gate scanner.
             </div>
           </div>
         </div>

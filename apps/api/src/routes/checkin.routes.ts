@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { query } from '../database.js';
 import { authMiddleware, requireRoles } from '../middleware/auth.js';
-import { verifyTicketCode } from '../services/qr.js';
+import { verifyAnyPass } from '../services/qr.js';
 
 const router = Router();
 
@@ -21,23 +21,29 @@ router.post(
       const staffId = req.user!.id;
       const { code, sessionId } = scanSchema.parse(req.body);
 
-      // 1. Verify HMAC signature offline first
-      const verification = verifyTicketCode(code);
-      if (!verification.valid) {
+      // 1. Verify HMAC signature offline first (supports static + dynamic SafeTix rolling token)
+      const verification = verifyAnyPass(code);
+      if (!verification.valid || !verification.ticketId) {
         res.status(400).json({
           result: 'INVALID',
-          message: 'Invalid ticket code signature or corrupted QR data.',
+          message:
+            verification.reason === 'EXPIRED_ROLLING_TOKEN'
+              ? 'This dynamic barcode has expired (SafeTix). Please present the live active pass from your app.'
+              : 'Invalid ticket code signature or corrupted QR data.',
+          reason: verification.reason,
         });
         return;
       }
+
+      const ticketId = verification.ticketId;
 
       // 2. Atomic check-in update (anti-double check-in concurrency protection)
       const updateRes = await query(
         `UPDATE tickets
          SET checked_in_at = now()
-         WHERE code = $1 AND status = 'ACTIVE' AND checked_in_at IS NULL
+         WHERE id = $1 AND status = 'ACTIVE' AND checked_in_at IS NULL
          RETURNING id, attendee_name, booking_id, ticket_type_id, event_seat_id, checked_in_at;`,
-        [code]
+        [ticketId]
       );
 
       if (updateRes.rowCount && updateRes.rowCount > 0) {
@@ -72,6 +78,7 @@ router.post(
           result: 'OK',
           message: 'Check-in successful! Welcome to the event.',
           attendee: details,
+          isRollingPass: verification.isRolling,
         });
         return;
       }
@@ -82,8 +89,8 @@ router.post(
                 es.section, es.row_label, es.seat_number
          FROM tickets t
          LEFT JOIN event_seats es ON t.event_seat_id = es.id
-         WHERE t.code = $1;`,
-        [code]
+         WHERE t.id = $1;`,
+        [ticketId]
       );
 
       if (!existingTicketRes.rowCount || existingTicketRes.rowCount === 0) {

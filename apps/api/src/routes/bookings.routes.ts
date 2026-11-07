@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../database.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
-import { signTicketCode, generateQrDataUrl } from '../services/qr.js';
+import { signTicketCode, generateQrDataUrl, generateRollingPassCode, ROLLING_WINDOW_SECONDS } from '../services/qr.js';
 import { realtimeHub } from '../services/realtime.js';
 import { triggerWaitlistOffer } from '../services/worker.js';
 import { sendBookingConfirmationEmail } from '../services/email.js';
@@ -419,6 +419,125 @@ router.post('/bookings/:id/cancel', authMiddleware, async (req: Request, res: Re
   } catch (error) {
     console.error('[Cancel Booking Error]', error);
     res.status(500).json({ error: 'INTERNAL_ERROR' });
+  }
+});
+
+// GET /tickets/:id/rolling-pass - Generate dynamic anti-scalping SafeTix pass (DICE.fm / Ticketmaster)
+router.get(
+  '/tickets/:id/rolling-pass',
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ticketId = req.params.id;
+      const userId = req.user!.id;
+
+      // Verify ticket ownership
+      const ticketRes = await query(
+        `SELECT t.id, t.code, t.status, t.checked_in_at, b.user_id,
+                t.attendee_name, tt.name as tier_name
+         FROM tickets t
+         JOIN bookings b ON t.booking_id = b.id
+         JOIN ticket_types tt ON t.ticket_type_id = tt.id
+         WHERE t.id = $1;`,
+        [ticketId]
+      );
+
+      if (!ticketRes.rowCount || ticketRes.rowCount === 0) {
+        res.status(404).json({ error: 'TICKET_NOT_FOUND' });
+        return;
+      }
+
+      const ticket = ticketRes.rows[0];
+      if (ticket.user_id !== userId && req.user!.role !== 'ADMIN' && req.user!.role !== 'STAFF') {
+        res.status(403).json({ error: 'FORBIDDEN' });
+        return;
+      }
+
+      const rolling = generateRollingPassCode(ticket.id, ROLLING_WINDOW_SECONDS);
+      const qrDataUrl = await generateQrDataUrl(rolling.code);
+
+      res.json({
+        ticketId: ticket.id,
+        status: ticket.status,
+        checkedInAt: ticket.checked_in_at,
+        attendeeName: ticket.attendee_name,
+        tierName: ticket.tier_name,
+        rollingCode: rolling.code,
+        qrDataUrl,
+        expiresAt: rolling.expiresAt,
+        remainingSeconds: rolling.remainingSeconds,
+        windowSeconds: ROLLING_WINDOW_SECONDS,
+      });
+    } catch (error) {
+      console.error('[Rolling Pass Error]', error);
+      res.status(500).json({ error: 'INTERNAL_ERROR' });
+    }
+  }
+);
+
+// POST /webhooks/payment - Webhook ingestion for asynchronous payment reconciliation (Stripe/VNPay/PayOS)
+const webhookPayloadSchema = z.object({
+  eventId: z.string(),
+  holdId: z.string().uuid(),
+  transactionId: z.string(),
+  amount: z.number().positive(),
+  status: z.enum(['SUCCEEDED', 'FAILED']),
+  signature: z.string().optional(),
+});
+
+router.post('/webhooks/payment', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = webhookPayloadSchema.parse(req.body);
+
+    // 1. Check idempotency for webhook delivery
+    const existing = await query(
+      `SELECT * FROM idempotency_records WHERE key = $1 AND user_id = '00000000-0000-0000-0000-000000000000'`,
+      [`webhook:${data.transactionId}`]
+    );
+
+    if (existing.rowCount && existing.rowCount > 0) {
+      res.json({ received: true, status: 'ALREADY_PROCESSED' });
+      return;
+    }
+
+    if (data.status === 'FAILED') {
+      // Release held seats immediately on payment failure notification
+      const holdRes = await query('SELECT session_id FROM holds WHERE id = $1', [data.holdId]);
+      if (holdRes.rowCount && holdRes.rowCount > 0) {
+        const sessionId = holdRes.rows[0].session_id;
+        await withTransaction(async (client) => {
+          await client.query(
+            `UPDATE event_seats
+             SET status = 'AVAILABLE', hold_id = NULL, hold_expires_at = NULL, version = version + 1
+             WHERE hold_id = $1;`,
+            [data.holdId]
+          );
+          await client.query(`DELETE FROM holds WHERE id = $1;`, [data.holdId]);
+        });
+        realtimeHub.broadcast(sessionId, 'seat_released', { holdId: data.holdId, reason: 'PAYMENT_FAILED' });
+      }
+
+      await query(
+        `INSERT INTO idempotency_records (key, user_id, status_code, response_body)
+         VALUES ($1, '00000000-0000-0000-0000-000000000000', 200, $2);`,
+        [`webhook:${data.transactionId}`, JSON.stringify({ received: true, action: 'RELEASED' })]
+      );
+
+      res.json({ received: true, action: 'RELEASED' });
+      return;
+    }
+
+    // Payment succeeded: Log webhook record
+    await query(
+      `INSERT INTO idempotency_records (key, user_id, status_code, response_body)
+       VALUES ($1, '00000000-0000-0000-0000-000000000000', 200, $2);`,
+      [`webhook:${data.transactionId}`, JSON.stringify({ received: true, action: 'CONFIRMED' })]
+    );
+
+    res.json({ received: true, action: 'CONFIRMED', transactionId: data.transactionId });
+  } catch (error: any) {
+    console.error('[Webhook Payment Error]', error);
+    res.status(400).json({ error: 'WEBHOOK_ERROR', message: error.message });
   }
 });
 

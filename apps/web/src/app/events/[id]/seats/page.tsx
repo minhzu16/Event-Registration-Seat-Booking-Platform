@@ -15,6 +15,8 @@ import {
   RefreshCw,
   X,
   Ticket,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { fetchApi, Seat, Session, API_BASE } from '@/lib/api';
 
@@ -32,6 +34,7 @@ export default function SeatMapPage() {
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [sseConnected, setSseConnected] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
 
   // Active Hold state
   const [activeHoldId, setActiveHoldId] = useState<string | null>(null);
@@ -341,17 +344,41 @@ export default function SeatMapPage() {
 
         {/* Live Hold Timer HUD */}
         {secondsRemaining !== null && (
-          <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-[#14120a] px-3.5 py-2">
-            <Clock className={`h-4 w-4 ${secondsRemaining < 120 ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`} />
+          <div
+            className={`flex items-center gap-3 rounded-lg px-3.5 py-2 border transition-all ${
+              secondsRemaining < 60
+                ? 'border-rose-500/60 bg-rose-950/40 animate-pulse text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                : 'border-amber-500/30 bg-[#14120a]'
+            }`}
+          >
+            <Clock
+              className={`h-4 w-4 ${
+                secondsRemaining < 60
+                  ? 'text-rose-400 animate-spin'
+                  : secondsRemaining < 180
+                  ? 'text-amber-400 animate-pulse'
+                  : 'text-amber-400'
+              }`}
+            />
             <div>
-              <p className="text-[10px] text-amber-400/90 font-medium">Hold active</p>
+              <p
+                className={`text-[10px] font-medium ${
+                  secondsRemaining < 60 ? 'text-rose-400 font-bold' : 'text-amber-400/90'
+                }`}
+              >
+                {secondsRemaining < 60 ? 'Expiring soon!' : 'Hold active'}
+              </p>
               <p className="text-base font-bold text-white font-mono leading-none">
                 {Math.floor(secondsRemaining / 60)}:{(secondsRemaining % 60).toString().padStart(2, '0')}
               </p>
             </div>
             <button
               onClick={() => setIsCheckoutOpen(true)}
-              className="ml-2 rounded bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition"
+              className={`ml-2 rounded px-3 py-1.5 text-xs font-semibold transition ${
+                secondsRemaining < 60
+                  ? 'bg-rose-500 text-white hover:bg-rose-400'
+                  : 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+              }`}
             >
               Confirm & pay
             </button>
@@ -375,12 +402,45 @@ export default function SeatMapPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: SVG Stage & Auditorium */}
         <div className="lg:col-span-3 flex flex-col items-center justify-center rounded-xl border border-white/[0.08] bg-[#0c101a] p-6 shadow-sm overflow-hidden">
-          {/* Stage Focal Point */}
-          <div className="w-full max-w-md mb-8">
-            <div className="stage-curved h-10 flex items-center justify-center">
-              <span className="text-[11px] font-semibold tracking-wider text-amber-400/90">
-                Stage & main acoustic focus
+          {/* Stage Focal Point with Acoustic Spotlight (Taste Skill Polish) */}
+          <div className="w-full max-w-lg mb-6 flex flex-col items-center">
+            <div className="relative w-full overflow-hidden rounded-t-[100px] border-t-2 border-amber-400/40 bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-transparent h-12 flex items-center justify-center shadow-[0_-10px_30px_rgba(245,158,11,0.15)]">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-400/20 via-transparent to-transparent pointer-events-none" />
+              <span className="text-[11px] font-bold tracking-widest uppercase text-amber-300 drop-shadow-sm flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                Acoustic Center Stage
               </span>
+            </div>
+            <div className="w-3/4 h-[1px] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent" />
+          </div>
+
+          {/* Zoom and Map View Controls (UI/UX Pro Max) */}
+          <div className="w-full flex items-center justify-between px-2 pb-2 mb-2 border-b border-white/[0.04]">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-slate-400">Scale: {Math.round(zoomScale * 100)}%</span>
+            </div>
+            <div className="flex items-center gap-1 bg-[#121824] p-1 rounded-lg border border-white/[0.08]">
+              <button
+                onClick={() => setZoomScale((prev) => Math.max(0.7, Number((prev - 0.15).toFixed(2))))}
+                className="p-1 rounded text-slate-300 hover:text-white hover:bg-white/[0.06] transition"
+                title="Zoom Out"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setZoomScale(1)}
+                className="px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-white/[0.06] rounded transition"
+                title="Reset Zoom"
+              >
+                100%
+              </button>
+              <button
+                onClick={() => setZoomScale((prev) => Math.min(1.8, Number((prev + 0.15).toFixed(2))))}
+                className="p-1 rounded text-slate-300 hover:text-white hover:bg-white/[0.06] transition"
+                title="Zoom In"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
 
@@ -392,74 +452,96 @@ export default function SeatMapPage() {
                 <p className="mt-2 text-xs text-slate-400">Loading seat layout...</p>
               </div>
             ) : (
-              <svg
-                width={maxX}
-                height={maxY}
-                className="select-none"
-                viewBox={`0 0 ${maxX} ${maxY}`}
+              <div
+                style={{
+                  transform: `scale(${zoomScale})`,
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}
               >
-                {seats.map((seat) => {
-                  const isSelected = selectedSeatIds.includes(seat.id);
-                  const isHeldByMe = seat.isHeldByMe || (isSelected && activeHoldId);
-                  const isHeldByOther = seat.status === 'HELD' && !isHeldByMe;
-                  const isBooked = seat.status === 'BOOKED';
-                  const isBlocked = seat.status === 'BLOCKED';
+                <svg
+                  width={maxX}
+                  height={maxY}
+                  className="select-none"
+                  viewBox={`0 0 ${maxX} ${maxY}`}
+                >
+                  {seats.map((seat) => {
+                    const isSelected = selectedSeatIds.includes(seat.id);
+                    const isHeldByMe = seat.isHeldByMe || (isSelected && activeHoldId);
+                    const isHeldByOther = seat.status === 'HELD' && !isHeldByMe;
+                    const isBooked = seat.status === 'BOOKED';
+                    const isBlocked = seat.status === 'BLOCKED';
 
-                  let fillColor = seat.color || '#38bdf8';
-                  let strokeColor = 'rgba(255,255,255,0.15)';
-                  let opacity = 1;
-                  let cursor = 'pointer';
+                    let fillColor = seat.color || '#38bdf8';
+                    let strokeColor = 'rgba(255,255,255,0.15)';
+                    let opacity = 1;
+                    let cursor = 'pointer';
 
-                  if (isBooked) {
-                    fillColor = '#1e293b';
-                    strokeColor = '#0f172a';
-                    opacity = 0.45;
-                    cursor = 'not-allowed';
-                  } else if (isBlocked) {
-                    fillColor = '#0f172a';
-                    strokeColor = '#020617';
-                    opacity = 0.25;
-                    cursor = 'not-allowed';
-                  } else if (isHeldByOther) {
-                    fillColor = '#dc2626';
-                    strokeColor = '#f87171';
-                    cursor = 'not-allowed';
-                  } else if (isHeldByMe || isSelected) {
-                    fillColor = '#f59e0b';
-                    strokeColor = '#fbbf24';
-                  }
+                    if (isBooked) {
+                      fillColor = '#1e293b';
+                      strokeColor = '#0f172a';
+                      opacity = 0.45;
+                      cursor = 'not-allowed';
+                    } else if (isBlocked) {
+                      fillColor = '#0f172a';
+                      strokeColor = '#020617';
+                      opacity = 0.25;
+                      cursor = 'not-allowed';
+                    } else if (isHeldByOther) {
+                      fillColor = '#dc2626';
+                      strokeColor = '#f87171';
+                      cursor = 'not-allowed';
+                    } else if (isHeldByMe || isSelected) {
+                      fillColor = '#f59e0b';
+                      strokeColor = '#fbbf24';
+                    }
 
-                  return (
-                    <g
-                      key={seat.id}
-                      onClick={() => toggleSeatSelection(seat)}
-                      className="transition-transform duration-100 hover:scale-105"
-                      style={{ cursor }}
-                    >
-                      <circle
-                        cx={seat.x}
-                        cy={seat.y}
-                        r={13}
-                        fill={fillColor}
-                        stroke={strokeColor}
-                        strokeWidth={isSelected ? 2.5 : 1}
-                        opacity={opacity}
-                      />
-                      <text
-                        x={seat.x}
-                        y={seat.y + 4}
-                        textAnchor="middle"
-                        fontSize="9"
-                        fontWeight="600"
-                        fill={isBooked ? '#64748b' : '#ffffff'}
-                        className="pointer-events-none"
+                    return (
+                      <g
+                        key={seat.id}
+                        onClick={() => toggleSeatSelection(seat)}
+                        className="transition-transform duration-100 hover:scale-105"
+                        style={{ cursor }}
                       >
-                        {seat.seatNumber}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+                        {/* 44px Accessible Touch Hitbox (WCAG 2.5.5) */}
+                        <circle
+                          cx={seat.x}
+                          cy={seat.y}
+                          r={22}
+                          fill="transparent"
+                        />
+                        <circle
+                          cx={seat.x}
+                          cy={seat.y}
+                          r={13}
+                          fill={fillColor}
+                          stroke={strokeColor}
+                          strokeWidth={isSelected ? 2.5 : 1}
+                          opacity={opacity}
+                        />
+                        <text
+                          x={seat.x}
+                          y={seat.y + 4}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fontWeight="600"
+                          fill={isBooked ? '#64748b' : '#ffffff'}
+                          className="pointer-events-none"
+                        >
+                          {seat.seatNumber}
+                        </text>
+                        {/* Color-blind accessible indicator glyphs */}
+                        {isSelected && (
+                          <circle cx={seat.x + 8} cy={seat.y - 8} r={3.5} fill="#10b981" stroke="#ffffff" strokeWidth="1" />
+                        )}
+                        {isBooked && (
+                          <line x1={seat.x - 4} y1={seat.y - 4} x2={seat.x + 4} y2={seat.y + 4} stroke="#475569" strokeWidth="1.5" />
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
             )}
           </div>
 
@@ -470,15 +552,19 @@ export default function SeatMapPage() {
               <span>Available</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-amber-500 border border-amber-400" />
-              <span>Selected by you</span>
+              <span className="h-3 w-3 rounded-full bg-amber-500 border border-amber-400 flex items-center justify-center">
+                <span className="h-1 w-1 rounded-full bg-white" />
+              </span>
+              <span>Selected (Yours)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-3 w-3 rounded-full bg-rose-600 border border-rose-400" />
               <span>Held by others</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-slate-800 border border-slate-700" />
+              <span className="h-3 w-3 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                <span className="h-0.5 w-1.5 bg-slate-500" />
+              </span>
               <span>Booked</span>
             </div>
           </div>
