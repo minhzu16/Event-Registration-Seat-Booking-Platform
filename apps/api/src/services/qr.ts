@@ -1,8 +1,10 @@
 import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { config } from '../config.js';
+import { DynamicTicketService, dynamicTicketService } from './dynamic-ticket.service.js';
 
-export const ROLLING_WINDOW_SECONDS = 15;
+export { DynamicTicketService, dynamicTicketService };
+export const ROLLING_WINDOW_SECONDS = DynamicTicketService.DEFAULT_TIME_STEP_SECONDS;
 
 /**
  * Static HMAC signature for tickets (traditional offline verifiable pass).
