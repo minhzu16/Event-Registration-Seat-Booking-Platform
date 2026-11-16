@@ -304,11 +304,25 @@ export default function SeatMapPage() {
     }
   }
 
-  const selectedSeats = seats.filter((s) => selectedSeatIds.includes(s.id));
-  const totalPrice = selectedSeats.reduce((acc, s) => acc + s.price, 0);
+  const selectedSeatSet = React.useMemo(() => new Set(selectedSeatIds), [selectedSeatIds]);
+  const selectedSeats = React.useMemo(
+    () => seats.filter((s) => selectedSeatSet.has(s.id)),
+    [seats, selectedSeatSet]
+  );
+  const totalPrice = React.useMemo(
+    () => selectedSeats.reduce((acc, s) => acc + s.price, 0),
+    [selectedSeats]
+  );
 
-  const maxX = Math.max(...seats.map((s) => s.x), 500) + 70;
-  const maxY = Math.max(...seats.map((s) => s.y), 400) + 70;
+  const { maxX, maxY } = React.useMemo(() => {
+    let max_x = 500;
+    let max_y = 400;
+    for (const s of seats) {
+      if (s.x > max_x) max_x = s.x;
+      if (s.y > max_y) max_y = s.y;
+    }
+    return { maxX: max_x + 70, maxY: max_y + 70 };
+  }, [seats]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -466,7 +480,7 @@ export default function SeatMapPage() {
                   viewBox={`0 0 ${maxX} ${maxY}`}
                 >
                   {seats.map((seat) => {
-                    const isSelected = selectedSeatIds.includes(seat.id);
+                    const isSelected = selectedSeatSet.has(seat.id);
                     const isHeldByMe = seat.isHeldByMe || (isSelected && activeHoldId);
                     const isHeldByOther = seat.status === 'HELD' && !isHeldByMe;
                     const isBooked = seat.status === 'BOOKED';
