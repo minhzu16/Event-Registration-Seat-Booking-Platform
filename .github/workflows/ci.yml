@@ -76,8 +76,8 @@ jobs:
         env:
           PORT: 4000
           DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/event_platform
-          JWT_SECRET: ci-test-secret-key-12345
-          QR_HMAC_SECRET: ci-test-hmac-secret-67890
+          JWT_SECRET: ci-only-jwt-secret-0123456789abcdefghij
+          QR_HMAC_SECRET: ci-only-qr-hmac-secret-0123456789abcdefghij
           BOOKING_STRATEGY: pessimistic
         run: |
           pnpm --filter event-platform-api dev &

@@ -17,11 +17,12 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { securityHeadersMiddleware, createRateLimiter } from './middleware/security.js';
 import { startBackgroundWorker, stopBackgroundWorker } from './services/worker.js';
 import { bootstrapAdmin } from './seed-admin.js';
+import { corsOptions } from './cors.js';
 
 export const app = express();
 
 app.use(securityHeadersMiddleware);
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
 
 // Request structured logging middleware

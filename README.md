@@ -110,7 +110,10 @@ rtk powershell -ExecutionPolicy Bypass -File scripts\start-db.ps1
 *(Cụm PostgreSQL độc lập sẽ lắng nghe trên cổng 5433, database `event_platform`, user `postgres`)*
 
 ### Bước 2: Khởi động Backend API
+Lần đầu: tạo `apps/api/.env` từ mẫu và điền `JWT_SECRET`, `QR_HMAC_SECRET` (≥ 32 ký tự). API **không khởi động** nếu thiếu hai giá trị này.
 ```powershell
+Copy-Item apps\api\.env.example apps\api\.env
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"   # chạy 2 lần, dán vào 2 biến trên
 rtk pnpm --filter event-platform-api dev
 ```
 *(Backend chạy trên `http://localhost:4000`, tự động khởi chạy worker và seeder dữ liệu)*

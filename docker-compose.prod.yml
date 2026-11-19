@@ -21,7 +21,7 @@ services:
     environment:
       POSTGRES_DB: event_platform
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secureproductionpassword2026}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
       - ./scripts/schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -40,9 +40,9 @@ services:
       replicas: 2 # 2 concurrent backend instances demonstrating distributed locking
     environment:
       PORT: 4000
-      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-secureproductionpassword2026}@db:5432/event_platform
-      JWT_SECRET: ${JWT_SECRET:-super-secret-production-ready-jwt-key}
-      QR_HMAC_SECRET: ${QR_HMAC_SECRET:-super-secret-hmac-qr-signing-key}
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:?Set DB_PASSWORD}@db:5432/event_platform
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (32+ characters)}
+      QR_HMAC_SECRET: ${QR_HMAC_SECRET:?Set QR_HMAC_SECRET (32+ characters)}
       BOOKING_STRATEGY: pessimistic
       DEFAULT_HOLD_MINUTES: 10
       # DEMO_MODE=true seeds demo accounts with the public password "password123": public demos only.

@@ -6,9 +6,14 @@ dotenv.config();
 const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().default('postgresql://postgres@127.0.0.1:5433/event_platform'),
-  JWT_SECRET: z.string().default('super-secret-jwt-key-2026-secure'),
+  // Required in every environment: a missing or short secret stops the API at boot (see .env.example).
+  JWT_SECRET: z.string({ required_error: 'JWT_SECRET is required' }).min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
-  QR_HMAC_SECRET: z.string().default('hmac-qr-signing-key-production-ready-2026'),
+  QR_HMAC_SECRET: z
+    .string({ required_error: 'QR_HMAC_SECRET is required' })
+    .min(32, 'QR_HMAC_SECRET must be at least 32 characters'),
+  // Browser origins allowed to call the API (comma-separated).
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
   BOOKING_STRATEGY: z.enum(['pessimistic', 'conditional', 'naive']).default('pessimistic'),
   DEFAULT_HOLD_MINUTES: z.coerce.number().default(10),
   LOG_LEVEL: z.string().default('info'),
@@ -40,6 +45,7 @@ const demoMode = flag(env.DEMO_MODE, ['development', 'test'].includes(env.NODE_E
 
 export const config = {
   ...env,
+  CORS_ORIGIN_LIST: env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
   DEMO_MODE_ENABLED: demoMode,
   // The concurrency lab (/admin/simulate/*) deletes tickets and resets seats: it follows demo mode
   // unless ENABLE_SIMULATION says otherwise.

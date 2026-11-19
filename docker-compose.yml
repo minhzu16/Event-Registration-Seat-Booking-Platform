@@ -40,8 +40,8 @@ services:
     environment:
       PORT: 4000
       DATABASE_URL: postgresql://postgres:postgrespassword@db:5432/event_platform
-      JWT_SECRET: super-secret-production-ready-jwt-key
-      QR_HMAC_SECRET: super-secret-hmac-qr-signing-key
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (32+ characters)}
+      QR_HMAC_SECRET: ${QR_HMAC_SECRET:?Set QR_HMAC_SECRET (32+ characters)}
       BOOKING_STRATEGY: pessimistic
       DEFAULT_HOLD_MINUTES: 10
     ports:
