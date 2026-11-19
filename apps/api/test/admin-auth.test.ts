@@ -10,7 +10,7 @@ const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('../src/database.js', () => ({ query, withTransaction: vi.fn(), pool: {} }));
 
 const SECRET = 'admin-route-guard-test-secret-0123456789abcdef';
-const ENV_KEYS = ['JWT_SECRET', 'NODE_ENV', 'ENABLE_SIMULATION'] as const;
+const ENV_KEYS = ['JWT_SECRET', 'NODE_ENV', 'ENABLE_SIMULATION', 'DEMO_MODE'] as const;
 const originalEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 
 type Env = Partial<Record<(typeof ENV_KEYS)[number], string>>;

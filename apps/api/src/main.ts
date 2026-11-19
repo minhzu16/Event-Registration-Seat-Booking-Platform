@@ -16,6 +16,7 @@ import adminRoutes from './routes/admin.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { securityHeadersMiddleware, createRateLimiter } from './middleware/security.js';
 import { startBackgroundWorker, stopBackgroundWorker } from './services/worker.js';
+import { bootstrapAdmin } from './seed-admin.js';
 
 export const app = express();
 
@@ -131,7 +132,13 @@ async function seedDefaultData() {
       return;
     }
 
-    console.log('[Seed] Seeding initial test data...');
+    // Demo accounts share the public password "password123": never create them outside demo mode.
+    if (!config.DEMO_MODE_ENABLED) {
+      await bootstrapAdmin();
+      return;
+    }
+
+    console.log('[Seed] Seeding initial demo data (DEMO_MODE)...');
     const salt = await bcrypt.genSalt(10);
     const hashedPw = await bcrypt.hash('password123', salt);
 

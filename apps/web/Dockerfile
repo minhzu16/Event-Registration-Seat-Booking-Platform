@@ -10,6 +10,9 @@ FROM deps AS builder
 WORKDIR /app
 COPY apps/web ./apps/web
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* values are inlined at build time: demo UI (role switcher, lab) is off unless set to true.
+ARG NEXT_PUBLIC_DEMO_MODE=false
+ENV NEXT_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_DEMO_MODE
 RUN pnpm --filter web build
 
 FROM node:22-alpine AS runner

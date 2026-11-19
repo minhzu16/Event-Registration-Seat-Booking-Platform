@@ -11,6 +11,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { fetchApi, Event } from '@/lib/api';
+import { DEMO_MODE } from '@/lib/demo';
 
 export default function HomePage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -78,13 +79,15 @@ export default function HomePage() {
               <Ticket className="h-4 w-4" />
               Browse events
             </a>
-            <Link
-              href="/simulate"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/[0.12] bg-[#141b29] px-5 py-2.5 text-xs font-medium text-slate-200 hover:border-white/[0.25] transition"
-            >
-              <Zap className="h-4 w-4 text-cyan-400" />
-              Concurrency stress lab
-            </Link>
+            {DEMO_MODE && (
+              <Link
+                href="/simulate"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.12] bg-[#141b29] px-5 py-2.5 text-xs font-medium text-slate-200 hover:border-white/[0.25] transition"
+              >
+                <Zap className="h-4 w-4 text-cyan-400" />
+                Concurrency stress lab
+              </Link>
+            )}
           </div>
 
           {/* Core System Properties */}

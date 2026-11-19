@@ -45,6 +45,11 @@ services:
       QR_HMAC_SECRET: ${QR_HMAC_SECRET:-super-secret-hmac-qr-signing-key}
       BOOKING_STRATEGY: pessimistic
       DEFAULT_HOLD_MINUTES: 10
+      # DEMO_MODE=true seeds demo accounts with the public password "password123": public demos only.
+      DEMO_MODE: ${DEMO_MODE:-false}
+      # Outside demo mode, the first boot creates this ADMIN (password: 12+ characters).
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
@@ -53,6 +58,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_DEMO_MODE: ${DEMO_MODE:-false}
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: /api

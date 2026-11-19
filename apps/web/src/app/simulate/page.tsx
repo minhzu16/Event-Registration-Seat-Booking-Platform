@@ -11,12 +11,15 @@ import {
   Gauge,
 } from 'lucide-react';
 import { fetchApi, Event } from '@/lib/api';
+import { DEMO_MODE } from '@/lib/demo';
 
-// The lab endpoints are ADMIN-only: point visitors at the role switcher instead of a bare 401/403.
+// The lab endpoints are ADMIN-only: explain that instead of showing a bare 401/403.
 function labErrorMessage(err: unknown, fallback: string): string {
   const { status, message } = (err ?? {}) as { status?: number; message?: string };
   if (status === 401 || status === 403) {
-    return 'Admin access required: open "Switch identity" in the top bar and choose Admin.';
+    return DEMO_MODE
+      ? 'Admin access required: open "Switch identity" in the top bar and choose Admin.'
+      : 'Admin access required: sign in with an administrator account.';
   }
   return message || fallback;
 }

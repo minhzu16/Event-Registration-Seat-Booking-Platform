@@ -13,6 +13,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { getStoredUser, setAuth, clearAuth, fetchApi, User } from '@/lib/api';
+import { DEMO_MODE } from '@/lib/demo';
 
 export function Navbar() {
   const pathname = usePathname();
@@ -24,9 +25,13 @@ export function Navbar() {
     const user = getStoredUser();
     if (user) {
       setCurrentUser(user);
-    } else {
+    } else if (DEMO_MODE) {
       quickLoginAs('alice@example.com', 'password123');
     }
+    // Pick up sign-ins and sign-outs made elsewhere, e.g. on the /login page.
+    const syncUser = () => setCurrentUser(getStoredUser());
+    window.addEventListener('auth-changed', syncUser);
+    return () => window.removeEventListener('auth-changed', syncUser);
   }, []);
 
   async function quickLoginAs(email: string, pass: string = 'password123') {
@@ -51,12 +56,12 @@ export function Navbar() {
     window.dispatchEvent(new Event('auth-changed'));
   }
 
-  const navLinks = [
+  const navLinks: { href: string; label: string; icon: typeof Ticket; highlight?: boolean }[] = [
     { href: '/', label: 'Events', icon: Ticket },
     { href: '/bookings', label: 'My passes', icon: Ticket },
     { href: '/organiser', label: 'Studio', icon: Building2 },
     { href: '/checkin', label: 'Scanner', icon: ScanLine },
-    { href: '/simulate', label: 'Concurrency lab', icon: Zap, highlight: true },
+    ...(DEMO_MODE ? [{ href: '/simulate', label: 'Concurrency lab', icon: Zap, highlight: true }] : []),
   ];
 
   return (
@@ -102,66 +107,68 @@ export function Navbar() {
 
         {/* Right side: Role Switcher & User Profile */}
         <div className="flex items-center gap-3">
-          {/* Quick Role Switcher */}
-          <div className="relative">
-            <button
-              onClick={() => setRoleSwitcherOpen(!roleSwitcherOpen)}
-              className="flex items-center gap-1.5 rounded-md border border-white/[0.1] bg-[#0e1422] px-2.5 py-1.5 text-xs text-slate-300 hover:border-white/[0.2] transition"
-              title="Switch role"
-            >
-              <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-              <span>{currentUser?.role || 'Guest'}</span>
-              <ChevronDown className="h-3 w-3 text-slate-400" />
-            </button>
+          {/* Quick Role Switcher: demo mode only, the demo accounts share a public password */}
+          {DEMO_MODE && (
+            <div className="relative">
+              <button
+                onClick={() => setRoleSwitcherOpen(!roleSwitcherOpen)}
+                className="flex items-center gap-1.5 rounded-md border border-white/[0.1] bg-[#0e1422] px-2.5 py-1.5 text-xs text-slate-300 hover:border-white/[0.2] transition"
+                title="Switch role"
+              >
+                <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
+                <span>{currentUser?.role || 'Guest'}</span>
+                <ChevronDown className="h-3 w-3 text-slate-400" />
+              </button>
 
-            {roleSwitcherOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-white/[0.1] bg-[#0c101a] p-1.5 shadow-xl backdrop-blur-xl z-50">
-                <div className="px-2 py-1 text-[10px] font-semibold text-slate-400">
-                  Switch identity
+              {roleSwitcherOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-lg border border-white/[0.1] bg-[#0c101a] p-1.5 shadow-xl backdrop-blur-xl z-50">
+                  <div className="px-2 py-1 text-[10px] font-semibold text-slate-400">
+                    Switch identity
+                  </div>
+                  <button
+                    onClick={() => quickLoginAs('alice@example.com')}
+                    className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
+                  >
+                    <div>
+                      <p className="font-medium">Alice</p>
+                      <p className="text-[10px] text-slate-400">alice@example.com</p>
+                    </div>
+                    <span className="text-[10px] text-slate-400">Attendee</span>
+                  </button>
+                  <button
+                    onClick={() => quickLoginAs('organiser@techsummit.io')}
+                    className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
+                  >
+                    <div>
+                      <p className="font-medium">Sarah</p>
+                      <p className="text-[10px] text-slate-400">organiser@techsummit.io</p>
+                    </div>
+                    <span className="text-[10px] text-amber-400">Organiser</span>
+                  </button>
+                  <button
+                    onClick={() => quickLoginAs('staff@eventplatform.com')}
+                    className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
+                  >
+                    <div>
+                      <p className="font-medium">Gate Staff</p>
+                      <p className="text-[10px] text-slate-400">staff@eventplatform.com</p>
+                    </div>
+                    <span className="text-[10px] text-cyan-400">Staff</span>
+                  </button>
+                  <button
+                    onClick={() => quickLoginAs('admin@eventplatform.com')}
+                    className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
+                  >
+                    <div>
+                      <p className="font-medium">Admin</p>
+                      <p className="text-[10px] text-slate-400">admin@eventplatform.com</p>
+                    </div>
+                    <span className="text-[10px] text-rose-400">Admin</span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => quickLoginAs('alice@example.com')}
-                  className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
-                >
-                  <div>
-                    <p className="font-medium">Alice</p>
-                    <p className="text-[10px] text-slate-400">alice@example.com</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Attendee</span>
-                </button>
-                <button
-                  onClick={() => quickLoginAs('organiser@techsummit.io')}
-                  className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
-                >
-                  <div>
-                    <p className="font-medium">Sarah</p>
-                    <p className="text-[10px] text-slate-400">organiser@techsummit.io</p>
-                  </div>
-                  <span className="text-[10px] text-amber-400">Organiser</span>
-                </button>
-                <button
-                  onClick={() => quickLoginAs('staff@eventplatform.com')}
-                  className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
-                >
-                  <div>
-                    <p className="font-medium">Gate Staff</p>
-                    <p className="text-[10px] text-slate-400">staff@eventplatform.com</p>
-                  </div>
-                  <span className="text-[10px] text-cyan-400">Staff</span>
-                </button>
-                <button
-                  onClick={() => quickLoginAs('admin@eventplatform.com')}
-                  className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded text-xs text-slate-200 hover:bg-[#162032] transition"
-                >
-                  <div>
-                    <p className="font-medium">Admin</p>
-                    <p className="text-[10px] text-slate-400">admin@eventplatform.com</p>
-                  </div>
-                  <span className="text-[10px] text-rose-400">Admin</span>
-                </button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* User Account / Avatar */}
           {currentUser ? (
@@ -203,13 +210,20 @@ export function Navbar() {
                 </div>
               )}
             </div>
-          ) : (
+          ) : DEMO_MODE ? (
             <button
               onClick={() => quickLoginAs('alice@example.com')}
               className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition"
             >
               Sign in
             </button>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition"
+            >
+              Sign in
+            </Link>
           )}
         </div>
       </div>

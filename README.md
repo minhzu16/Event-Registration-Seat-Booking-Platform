@@ -85,7 +85,11 @@ pj1/
 
 ## 3. Tài khoản Demo kiểm thử nhanh (1-Click Switcher)
 
-Hệ thống có sẵn thanh đổi vai trò ngay trên góc phải Navbar:
+> **Chỉ có ở demo mode.** Các tài khoản dưới đây dùng chung mật khẩu công khai `password123`, nên chỉ được tạo khi bật demo mode. Demo mode bật mặc định khi chạy dev (`NODE_ENV=development`/`test`); ở môi trường khác phải đặt `DEMO_MODE=true` (API) và build web với `NEXT_PUBLIC_DEMO_MODE=true`.
+>
+> **Ngoài demo mode** (mặc định của bản build production): không có dữ liệu demo, không có switcher, người dùng đăng nhập ở `/login`. Lần khởi động đầu với database trống sẽ tạo tài khoản ADMIN từ `ADMIN_EMAIL` / `ADMIN_PASSWORD` (≥ 12 ký tự). Thiếu hai biến này thì không tạo tài khoản nào.
+
+Ở demo mode, hệ thống có sẵn thanh đổi vai trò ngay trên góc phải Navbar:
 
 | Vai trò | Email | Mật khẩu | Chức năng kiểm thử |
 |---|---|---|---|
