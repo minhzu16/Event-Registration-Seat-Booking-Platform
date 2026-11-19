@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
 const API_BASE = 'http://localhost:4000';
+// /admin endpoints are ADMIN-only; defaults match the demo admin created by seedDefaultData().
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin@eventplatform.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'password123';
 let serverOnline = false;
+let adminHeaders: Record<string, string> = {};
 
 describe('Concurrency & Seat Hold Integrity Tests', () => {
   beforeAll(async () => {
@@ -11,6 +15,16 @@ describe('Concurrency & Seat Hold Integrity Tests', () => {
     } catch {
       serverOnline = false;
     }
+    if (!serverOnline) return;
+
+    const login = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+    });
+    expect(login.status).toBe(200);
+    const { token } = await login.json();
+    adminHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
   });
 
   it('Pessimistic lock: 100 concurrent requests for 5 seats -> exactly 5 succeed, 95 receive 409 conflict, 0 double booking', async () => {
@@ -33,7 +47,7 @@ describe('Concurrency & Seat Hold Integrity Tests', () => {
     // 3. Run ticket drop simulation
     const simRes = await fetch(`${API_BASE}/admin/simulate/ticket-drop`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders,
       body: JSON.stringify({
         sessionId: session.id,
         targetSeatIds,
@@ -62,7 +76,7 @@ describe('Concurrency & Seat Hold Integrity Tests', () => {
 
     const simRes = await fetch(`${API_BASE}/admin/simulate/ticket-drop`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders,
       body: JSON.stringify({
         sessionId: session.id,
         targetSeatIds,
@@ -87,7 +101,9 @@ describe('Concurrency & Seat Hold Integrity Tests', () => {
     const reservedEvent = eventsRes.events.find((e: any) => e.seating_mode === 'RESERVED') || eventsRes.events[0];
     const session = reservedEvent.sessions[0];
 
-    const integrityRes = await fetch(`${API_BASE}/admin/integrity/${session.id}`).then((r) => r.json());
+    const integrityRes = await fetch(`${API_BASE}/admin/integrity/${session.id}`, { headers: adminHeaders }).then((r) =>
+      r.json()
+    );
     expect(integrityRes.status).toBe('PASSED');
     expect(integrityRes.totalViolations).toBe(0);
     expect(integrityRes.doubleBookings).toEqual([]);

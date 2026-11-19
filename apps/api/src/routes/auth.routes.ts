@@ -12,7 +12,8 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   fullName: z.string().min(2),
-  role: z.enum(['ATTENDEE', 'ORGANISER', 'STAFF', 'ADMIN']).default('ATTENDEE'),
+  // Self-service sign-up only; STAFF and ADMIN are privileged and are never self-assigned.
+  role: z.enum(['ATTENDEE', 'ORGANISER']).default('ATTENDEE'),
   phone: z.string().optional(),
 });
 

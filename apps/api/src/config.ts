@@ -13,6 +13,17 @@ const envSchema = z.object({
   DEFAULT_HOLD_MINUTES: z.coerce.number().default(10),
   LOG_LEVEL: z.string().default('info'),
   NODE_ENV: z.string().default('development'),
+  ENABLE_SIMULATION: z.string().optional(),
 });
 
-export const config = envSchema.parse(process.env);
+const env = envSchema.parse(process.env);
+const simulationFlag = env.ENABLE_SIMULATION?.trim().toLowerCase();
+
+export const config = {
+  ...env,
+  // The concurrency lab (/admin/simulate/*) deletes tickets and resets seats, so it is only on
+  // by default in development/test; anywhere else it needs ENABLE_SIMULATION=true (or 1/yes/on).
+  SIMULATION_ENABLED: simulationFlag
+    ? ['true', '1', 'yes', 'on'].includes(simulationFlag)
+    : ['development', 'test'].includes(env.NODE_ENV),
+};

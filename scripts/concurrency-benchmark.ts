@@ -4,6 +4,22 @@
  */
 
 const API_BASE = process.env.API_BASE || 'http://localhost:4000';
+// /admin endpoints are ADMIN-only; defaults match the demo admin created by the API seeder.
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@eventplatform.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password123';
+
+async function adminHeaders(): Promise<Record<string, string>> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+  });
+  if (!res.ok) {
+    throw new Error(`Admin login failed (HTTP ${res.status}). Set ADMIN_EMAIL / ADMIN_PASSWORD.`);
+  }
+  const { token } = await res.json();
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+}
 
 interface BenchmarkRow {
   strategy: string;
@@ -48,21 +64,26 @@ async function runBenchmark() {
   ];
 
   const resultsTable: BenchmarkRow[] = [];
+  const headers = await adminHeaders();
 
   for (const strat of strategies) {
     process.stdout.write(`Executing strategy [${strat.toUpperCase()}] ... `);
     const start = Date.now();
 
-    const simRes = await fetch(`${API_BASE}/admin/simulate/ticket-drop`, {
+    const res = await fetch(`${API_BASE}/admin/simulate/ticket-drop`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         sessionId: session.id,
         targetSeatIds,
         concurrentRequests: 100,
         strategy: strat,
       }),
-    }).then((r) => r.json());
+    });
+    const simRes = await res.json();
+    if (!res.ok) {
+      throw new Error(`ticket-drop failed (HTTP ${res.status}): ${simRes.message ?? simRes.error}`);
+    }
 
     const b = simRes.benchmark;
     const ir = simRes.integrityReport;

@@ -12,6 +12,15 @@ import {
 } from 'lucide-react';
 import { fetchApi, Event } from '@/lib/api';
 
+// The lab endpoints are ADMIN-only: point visitors at the role switcher instead of a bare 401/403.
+function labErrorMessage(err: unknown, fallback: string): string {
+  const { status, message } = (err ?? {}) as { status?: number; message?: string };
+  if (status === 401 || status === 403) {
+    return 'Admin access required: open "Switch identity" in the top bar and choose Admin.';
+  }
+  return message || fallback;
+}
+
 export default function ConcurrencyLabPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
@@ -72,8 +81,8 @@ export default function ConcurrencyLabPage() {
 
       setBenchmarkResult(res.benchmark);
       setIntegrityReport(res.integrityReport);
-    } catch (err: any) {
-      alert(err.message || 'Simulation failed');
+    } catch (err) {
+      alert(labErrorMessage(err, 'Simulation failed'));
     } finally {
       setIsRunning(false);
     }
@@ -85,8 +94,8 @@ export default function ConcurrencyLabPage() {
       setIsCheckingIntegrity(true);
       const res = await fetchApi(`/admin/integrity/${selectedSessionId}`);
       setIntegrityReport(res);
-    } catch (err: any) {
-      alert(err.message || 'Integrity check failed');
+    } catch (err) {
+      alert(labErrorMessage(err, 'Integrity check failed'));
     } finally {
       setIsCheckingIntegrity(false);
     }

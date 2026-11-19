@@ -2,7 +2,10 @@
 param(
     [string]$ApiBase = "http://localhost:4000",
     [int]$VUs = 100,
-    [int]$Iterations = 1000
+    [int]$Iterations = 1000,
+    # /admin endpoints are ADMIN-only; defaults match the demo admin created by the API seeder.
+    [string]$AdminEmail = "admin@eventplatform.com",
+    [string]$AdminPassword = "password123"
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +25,12 @@ $hotSeats | ConvertTo-Json | Set-Content $hotSeatsJsonPath -Encoding UTF8
 Write-Host "Targeted Session: $sessionId" -ForegroundColor Green
 Write-Host "Loaded 10 contested hot seats into hot-seats.json" -ForegroundColor Green
 
+$login = Invoke-RestMethod -Uri "$ApiBase/auth/login" -Method Post -ContentType "application/json" -Body (@{
+    email = $AdminEmail
+    password = $AdminPassword
+} | ConvertTo-Json)
+$adminHeaders = @{ Authorization = "Bearer $($login.token)" }
+
 # 2. Check if k6 is available
 $k6Cmd = Get-Command k6 -ErrorAction SilentlyContinue
 
@@ -32,7 +41,7 @@ if ($k6Cmd) {
     & k6 run --vus $VUs --iterations $Iterations (Join-Path $PSScriptRoot "ticket-drop.js")
 } else {
     Write-Host "k6 binary not found on PATH. Running Node concurrent test runner..." -ForegroundColor Yellow
-    $simRes = Invoke-RestMethod -Uri "$ApiBase/admin/simulate/ticket-drop" -Method Post -ContentType "application/json" -Body (@{
+    $simRes = Invoke-RestMethod -Uri "$ApiBase/admin/simulate/ticket-drop" -Method Post -Headers $adminHeaders -ContentType "application/json" -Body (@{
         sessionId = $sessionId
         targetSeatIds = $hotSeats
         concurrentRequests = $Iterations
@@ -55,7 +64,7 @@ if ($k6Cmd) {
 
 # 3. Automatic SQL Integrity Verification
 Write-Host "`nVerifying Database SQL Integrity..." -ForegroundColor Yellow
-$integrity = Invoke-RestMethod -Uri "$ApiBase/admin/integrity/$sessionId" -Method Get
+$integrity = Invoke-RestMethod -Uri "$ApiBase/admin/integrity/$sessionId" -Method Get -Headers $adminHeaders
 
 if ($integrity.status -eq "PASSED" -and $integrity.totalViolations -eq 0) {
     Write-Host "INTEGRITY CHECK PASSED: 0 Double Bookings, 0 Seat Inconsistencies, 0 Capacity Violations!" -ForegroundColor Green

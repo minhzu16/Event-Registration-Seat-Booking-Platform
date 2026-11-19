@@ -122,7 +122,11 @@ rtk pnpm --filter web dev
 ## 5. Kịch bản Trình diễn & Kiểm thử Concurrency
 
 ### Kịch bản A: Trực quan trên giao diện Web (`/simulate`)
-1. Truy cập `http://localhost:3000/simulate`.
+
+> Mọi endpoint `/admin/*` yêu cầu tài khoản **Admin** (không token → 401, vai trò khác → 403).
+> Lab mô phỏng xoá vé và reset ghế nên **chỉ bật mặc định khi `NODE_ENV` là `development` hoặc `test`**; môi trường khác (production, staging…) phải bật bằng `ENABLE_SIMULATION=true` (chỉ nên dùng cho bản demo). Truy vấn integrity (chỉ đọc) vẫn dùng được.
+
+1. Mở **Switch identity** trên thanh điều hướng, chọn **Admin**, rồi truy cập `http://localhost:3000/simulate`.
 2. Chọn phiên sự kiện, chọn **100 Parallel Requests** tranh chấp **5 ghế**.
 3. Chọn chiến lược:
    - **Pessimistic Lock:** Đúng 5 người thắng (201 Success), 95 người nhận 409 Conflict, 0 lỗi 500. Huy hiệu SQL Integrity màu xanh: **PASSED (0 Violations)**.

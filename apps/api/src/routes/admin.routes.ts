@@ -2,9 +2,13 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { query, withTransaction } from '../database.js';
 import { authMiddleware, requireRoles } from '../middleware/auth.js';
+import { config } from '../config.js';
 import crypto from 'crypto';
 
 const router = Router();
+
+// Every /admin endpoint requires an authenticated ADMIN.
+router.use('/admin', authMiddleware, requireRoles('ADMIN'));
 
 // GET /admin/integrity/:sessionId - Run comprehensive SQL integrity checks
 export async function runIntegrityCheck(sessionId: string) {
@@ -53,9 +57,14 @@ export async function runIntegrityCheck(sessionId: string) {
 }
 
 router.get('/admin/integrity/:sessionId', async (req: Request, res: Response): Promise<void> => {
+  const sessionId = z.string().uuid().safeParse(req.params.sessionId);
+  if (!sessionId.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: 'sessionId must be a UUID' });
+    return;
+  }
+
   try {
-    const { sessionId } = req.params;
-    const report = await runIntegrityCheck(sessionId);
+    const report = await runIntegrityCheck(sessionId.data);
     res.json(report);
   } catch (error) {
     console.error('[Integrity Check Error]', error);
@@ -72,6 +81,14 @@ const simulateSchema = z.object({
 });
 
 router.post('/admin/simulate/ticket-drop', async (req: Request, res: Response): Promise<void> => {
+  if (!config.SIMULATION_ENABLED) {
+    res.status(404).json({
+      error: 'SIMULATION_DISABLED',
+      message: 'The concurrency lab is disabled in this environment (set ENABLE_SIMULATION=true to enable it).',
+    });
+    return;
+  }
+
   try {
     const data = simulateSchema.parse(req.body);
     const { sessionId, targetSeatIds, concurrentRequests, strategy } = data;
