@@ -35,6 +35,14 @@ jobs:
   test-concurrency:
     name: Concurrency Integration Tests (Real PostgreSQL)
     runs-on: ubuntu-latest
+    env:
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/event_platform
+      JWT_SECRET: ci-only-jwt-secret-0123456789abcdefghij
+      QR_HMAC_SECRET: ci-only-qr-hmac-secret-0123456789abcdefghij
+      BOOKING_STRATEGY: pessimistic
+      # Demo mode seeds admin@eventplatform.com / password123, the defaults the live tests log in with.
+      DEMO_MODE: "true"
     services:
       postgres:
         image: postgres:16-alpine
@@ -73,16 +81,12 @@ jobs:
           PGPASSWORD=testpassword psql -h localhost -U postgres -d event_platform -f scripts/schema.sql
 
       - name: Start API in Background
-        env:
-          PORT: 4000
-          DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/event_platform
-          JWT_SECRET: ci-only-jwt-secret-0123456789abcdefghij
-          QR_HMAC_SECRET: ci-only-qr-hmac-secret-0123456789abcdefghij
-          BOOKING_STRATEGY: pessimistic
         run: |
           pnpm --filter event-platform-api dev &
-          sleep 5
+          timeout 60 bash -c 'until curl -sf http://localhost:4000/health; do sleep 1; done'
 
       - name: Run Concurrency & Integrity Test Suite
+        env:
+          LIVE_API: "1"
         run: |
           pnpm --filter event-platform-api test

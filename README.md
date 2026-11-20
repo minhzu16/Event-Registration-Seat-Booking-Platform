@@ -149,6 +149,12 @@ rtk pnpm --filter event-platform-api test
 ```
 Tất cả 3 test cases về concurrency (Pessimistic, CAS, SQL Integrity) vượt qua 100% trong ~600ms!
 
+#### Running the live tests
+```bash
+LIVE_API=1 pnpm --filter event-platform-api test
+```
+Chạy lệnh trên khi API đang chạy ở chế độ demo (`DEMO_MODE=true`) để thực thi bộ test concurrency và integrity trên server thật. Không đặt `LIVE_API` thì bộ test này được đánh dấu `skipped`; đặt `LIVE_API=1` mà API không chạy thì test **fail** chứ không pass giả.
+
 ---
 
 ## 6. Chính sách Huỷ vé & Chống quét 2 lần
