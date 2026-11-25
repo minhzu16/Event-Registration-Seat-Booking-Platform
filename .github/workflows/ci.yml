@@ -2,7 +2,7 @@ name: CI & Concurrency Verification
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, security/p0]
   pull_request:
     branches: [main, master]
 
@@ -102,15 +102,18 @@ jobs:
         env:
           LIVE_API: "1"
         run: |
+          set -o pipefail
           pnpm --filter event-platform-api test:coverage | tee coverage-summary.txt
 
       - name: Publish Coverage Summary
         if: always()
         run: |
-          echo "### Test Coverage - event-platform-api" >> "$GITHUB_STEP_SUMMARY"
-          echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          tail -n 25 coverage-summary.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Test Coverage - event-platform-api"
+            echo '```text'
+            tail -n 25 coverage-summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   e2e:
     name: Playwright Admin E2E Tests
