@@ -22,8 +22,33 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+function setRefreshTokenCookie(res: Response, refreshToken: string): void {
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearRefreshTokenCookie(res: Response): void {
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  });
+}
+
+function createTokens(user: AuthUser): { accessToken: string; refreshToken: string } {
+  const accessToken = jwt.sign(user, config.JWT_SECRET, { expiresIn: '15m' });
+  const refreshToken = jwt.sign({ id: user.id, typ: 'refresh' }, config.JWT_SECRET, { expiresIn: '7d' });
+  return { accessToken, refreshToken };
+}
+
 function createToken(user: AuthUser): string {
-  return jwt.sign(user, config.JWT_SECRET, { expiresIn: '7d' });
+  return createTokens(user).accessToken;
 }
 
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
@@ -65,11 +90,12 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       role: user.role,
     };
 
-    const token = createToken(authUser);
-    res.status(201).json({ user: authUser, token });
-  } catch (error: any) {
+    const { accessToken, refreshToken } = createTokens(authUser);
+    setRefreshTokenCookie(res, refreshToken);
+    res.status(201).json({ user: authUser, token: accessToken, accessToken });
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+      res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
       return;
     }
     console.error('[Auth Register Error]', error);
@@ -105,16 +131,69 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       role: user.role,
     };
 
-    const token = createToken(authUser);
-    res.json({ user: authUser, token });
-  } catch (error: any) {
+    const { accessToken, refreshToken } = createTokens(authUser);
+    setRefreshTokenCookie(res, refreshToken);
+    res.json({ user: authUser, token: accessToken, accessToken });
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+      res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
       return;
     }
     console.error('[Auth Login Error]', error);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Login failed' });
   }
+});
+
+router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawToken = (req.cookies?.refreshToken as string | undefined) || (req.body?.refreshToken as string | undefined);
+    if (!rawToken) {
+      clearRefreshTokenCookie(res);
+      res.status(401).json({ error: 'MISSING_REFRESH_TOKEN', message: 'Refresh token is required' });
+      return;
+    }
+
+    let payload: { id: string; typ?: string };
+    try {
+      payload = jwt.verify(rawToken, config.JWT_SECRET) as { id: string; typ?: string };
+    } catch {
+      clearRefreshTokenCookie(res);
+      res.status(401).json({ error: 'INVALID_REFRESH_TOKEN', message: 'Invalid or expired refresh token' });
+      return;
+    }
+
+    const userRes = await query(
+      `SELECT id, email, full_name, role FROM users WHERE id = $1`,
+      [payload.id]
+    );
+
+    if (!userRes.rowCount || userRes.rowCount === 0) {
+      clearRefreshTokenCookie(res);
+      res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
+      return;
+    }
+
+    const user = userRes.rows[0];
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name,
+      role: user.role,
+    };
+
+    const { accessToken, refreshToken } = createTokens(authUser);
+    setRefreshTokenCookie(res, refreshToken);
+    res.json({ user: authUser, token: accessToken, accessToken });
+  } catch (error) {
+    console.error('[Auth Refresh Error]', error);
+    clearRefreshTokenCookie(res);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Token refresh failed' });
+  }
+});
+
+router.post('/logout', (_req: Request, res: Response): void => {
+  clearRefreshTokenCookie(res);
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 router.get('/me', authMiddleware, async (req: Request, res: Response): Promise<void> => {

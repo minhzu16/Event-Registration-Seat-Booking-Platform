@@ -222,9 +222,10 @@ router.post('/admin/simulate/ticket-drop', async (req: Request, res: Response): 
           }
           latencies.push(Date.now() - reqStart);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         latencies.push(Date.now() - reqStart);
-        results.push({ status: 500, message: err.message });
+        results.push({ status: 500, message: msg });
       }
     });
 
@@ -274,9 +275,9 @@ router.post('/admin/simulate/ticket-drop', async (req: Request, res: Response): 
       },
       integrityReport,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+      res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
       return;
     }
     console.error('[Simulate Error]', error);

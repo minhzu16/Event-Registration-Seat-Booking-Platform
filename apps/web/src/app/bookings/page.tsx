@@ -12,7 +12,6 @@ import {
   RefreshCw,
   ShieldCheck,
   Clock,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { fetchApi, Booking } from '@/lib/api';
@@ -35,24 +34,6 @@ export default function MyBookingsPage() {
     remainingSeconds: number;
   } | null>(null);
   const [rollingLoading, setRollingLoading] = useState(false);
-
-  useEffect(() => {
-    if (!activeRollingTicket) return;
-
-    const timer = setInterval(() => {
-      setActiveRollingTicket((prev) => {
-        if (!prev) return null;
-        if (prev.remainingSeconds <= 1) {
-          // Time to refresh rolling token
-          fetchRollingPass(prev.id, prev.attendeeName, prev.tierName, prev.seatInfo);
-          return { ...prev, remainingSeconds: 15 };
-        }
-        return { ...prev, remainingSeconds: prev.remainingSeconds - 1 };
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [activeRollingTicket?.id]);
 
   async function fetchRollingPass(ticketId: string, attendeeName: string, tierName: string, seatInfo?: string) {
     try {
@@ -81,22 +62,54 @@ export default function MyBookingsPage() {
   }
 
   useEffect(() => {
-    loadBookings();
-    window.addEventListener('auth-changed', loadBookings);
-    return () => window.removeEventListener('auth-changed', loadBookings);
-  }, []);
+    if (!activeRollingTicket) return;
+
+    const timer = setInterval(() => {
+      setActiveRollingTicket((prev) => {
+        if (!prev) return null;
+        if (prev.remainingSeconds <= 1) {
+          // Time to refresh rolling token
+          fetchRollingPass(prev.id, prev.attendeeName, prev.tierName, prev.seatInfo);
+          return { ...prev, remainingSeconds: 15 };
+        }
+        return { ...prev, remainingSeconds: prev.remainingSeconds - 1 };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeRollingTicket?.id]);
 
   async function loadBookings() {
     try {
       setLoading(true);
       const res = await fetchApi<{ bookings: Booking[] }>('/me/bookings');
       setBookings(res.bookings || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load bookings', err);
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    // `loading` starts true, so the first fetch only sets state once the promise settles.
+    let ignore = false;
+    const refresh = () =>
+      fetchApi<{ bookings: Booking[] }>('/me/bookings')
+        .then((res) => {
+          if (!ignore) setBookings(res.bookings || []);
+        })
+        .catch((err) => console.error('Failed to load bookings', err))
+        .finally(() => {
+          if (!ignore) setLoading(false);
+        });
+    void refresh();
+    window.addEventListener('auth-changed', refresh);
+    return () => {
+      ignore = true;
+      window.removeEventListener('auth-changed', refresh);
+    };
+  }, []);
 
   async function handleConfirmCancel() {
     if (!cancelModalBooking) return;
@@ -109,8 +122,8 @@ export default function MyBookingsPage() {
       setMessage(`Booking cancelled successfully. Refund of ${res.refundAmount.toLocaleString('vi-VN')} ₫ initiated.`);
       setCancelModalBooking(null);
       loadBookings();
-    } catch (err: any) {
-      alert(err.message || 'Failed to cancel booking');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to cancel booking');
     } finally {
       setCancellingId(null);
     }
@@ -118,43 +131,43 @@ export default function MyBookingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <div className="flex items-center justify-between border-b border-white/[0.08] pb-4 mb-6">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-            <TicketIcon className="h-5 w-5 text-amber-400" />
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <TicketIcon className="h-5 w-5 text-indigo-600" />
             My bookings and admission passes
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             Present these cryptographic HMAC QR passes at the entrance scanner for instant check-in.
           </p>
         </div>
         <button
           onClick={loadBookings}
-          className="flex items-center gap-1.5 rounded-md border border-white/[0.1] bg-[#0e1422] px-3 py-1.5 text-xs text-slate-300 hover:text-white transition"
+          className="flex items-center gap-1.5 rounded-md border border-white/70 glass px-3 py-1.5 text-xs text-slate-700 hover:text-slate-900 transition"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </button>
       </div>
 
       {message && (
-        <div className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-950/30 p-3.5 text-xs text-emerald-300">
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-700">
           {message}
         </div>
       )}
 
       {loading ? (
         <div className="py-20 text-center">
-          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-          <p className="mt-3 text-xs text-slate-400">Loading your tickets...</p>
+          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+          <p className="mt-3 text-xs text-slate-600">Loading your tickets...</p>
         </div>
       ) : bookings.length === 0 ? (
-        <div className="rounded-xl border border-white/[0.08] bg-[#0c101a] p-12 text-center">
+        <div className="rounded-xl border border-white/70 glass p-12 text-center">
           <TicketIcon className="mx-auto h-10 w-10 text-slate-500 mb-2" />
-          <h3 className="text-sm font-semibold text-white">No active bookings yet</h3>
-          <p className="text-xs text-slate-400 mt-1">Explore scheduled events and reserve your seats now.</p>
+          <h3 className="text-sm font-semibold text-slate-900">No active bookings yet</h3>
+          <p className="text-xs text-slate-600 mt-1">Explore scheduled events and reserve your seats now.</p>
           <Link
             href="/"
-            className="mt-5 inline-flex rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition"
+            className="mt-5 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition"
           >
             Browse events
           </Link>
@@ -176,34 +189,34 @@ export default function MyBookingsPage() {
                 key={booking.id}
                 className={`overflow-hidden rounded-xl border ${
                   isCancelled
-                    ? 'border-white/[0.04] bg-[#090d16] opacity-60'
-                    : 'border-white/[0.08] bg-[#0c101a]'
+                    ? 'border-white/50 glass opacity-60'
+                    : 'border-white/70 glass'
                 } transition`}
               >
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-white/[0.06] bg-[#0f1523] p-4 gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 bg-white/50 p-4 gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-semibold text-amber-400">
+                      <span className="text-xs font-mono font-semibold text-indigo-600">
                         {booking.reference}
                       </span>
                       <span
                         className={`rounded px-2 py-0.5 text-[10px] font-medium ${
                           isCancelled
-                            ? 'bg-rose-950 text-rose-400 border border-rose-800/40'
-                            : 'bg-emerald-950 text-emerald-400 border border-emerald-800/40'
+                            ? 'bg-red-50 text-red-600 border border-red-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         }`}
                       >
                         {booking.status}
                       </span>
                     </div>
-                    <h3 className="text-base font-bold text-white mt-1">{booking.event_title}</h3>
+                    <h3 className="text-base font-bold text-slate-900 mt-1">{booking.event_title}</h3>
                   </div>
 
                   <div className="flex items-center gap-4 text-xs">
                     <div>
-                      <p className="text-[10px] text-slate-400">Paid amount</p>
-                      <p className="font-semibold text-white">
+                      <p className="text-[10px] text-slate-600">Paid amount</p>
+                      <p className="font-semibold text-slate-900">
                         {Number(booking.total_amount).toLocaleString('vi-VN')} ₫
                       </p>
                     </div>
@@ -211,7 +224,7 @@ export default function MyBookingsPage() {
                     {!isCancelled && (
                       <button
                         onClick={() => setCancelModalBooking(booking)}
-                        className="rounded-md border border-rose-500/30 bg-rose-950/20 px-2.5 py-1 text-xs font-medium text-rose-400 hover:bg-rose-900/30 transition"
+                        className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition"
                       >
                         Cancel reservation
                       </button>
@@ -220,20 +233,20 @@ export default function MyBookingsPage() {
                 </div>
 
                 {/* Sub details */}
-                <div className="flex flex-wrap gap-4 border-b border-white/[0.04] px-4 py-2.5 text-xs text-slate-400 bg-[#0a0e18]">
+                <div className="flex flex-wrap gap-4 border-b border-slate-200 px-4 py-2.5 text-xs text-slate-600 bg-white/30">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-amber-400" />
+                    <Calendar className="h-3.5 w-3.5 text-indigo-600" />
                     <span>{startsAt}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                    <MapPin className="h-3.5 w-3.5 text-slate-500" />
                     <span>{booking.venue_name}</span>
                   </div>
                 </div>
 
                 {/* Issued Tickets */}
                 <div className="p-4">
-                  <p className="text-xs font-medium text-slate-400 mb-3">
+                  <p className="text-xs font-medium text-slate-600 mb-3">
                     Issued tickets ({booking.tickets?.length || 0})
                   </p>
 
@@ -244,7 +257,7 @@ export default function MyBookingsPage() {
                       return (
                         <div
                           key={t.id}
-                          className="flex flex-col sm:flex-row items-center gap-3.5 rounded-lg border border-white/[0.06] bg-[#121824] p-3.5"
+                          className="flex flex-col sm:flex-row items-center gap-3.5 rounded-lg border border-white/70 glass p-3.5"
                         >
                           {/* QR Code image */}
                           <div className="flex flex-col items-center shrink-0 bg-white p-2 rounded-md shadow-sm">
@@ -264,24 +277,24 @@ export default function MyBookingsPage() {
 
                           {/* Ticket Meta */}
                           <div className="flex-1 space-y-1 text-center sm:text-left">
-                            <p className="text-xs font-bold text-white">{t.attendeeName}</p>
-                            <p className="text-xs text-amber-300 font-medium">{t.ticketTypeName}</p>
+                            <p className="text-xs font-bold text-slate-900">{t.attendeeName}</p>
+                            <p className="text-xs text-indigo-600 font-medium">{t.ticketTypeName}</p>
 
                             {t.seatSection ? (
-                              <p className="text-xs text-slate-300 font-mono">
+                              <p className="text-xs text-slate-700 font-mono">
                                 {t.seatSection} • Row {t.seatRow}-{t.seatNumber}
                               </p>
                             ) : (
-                              <p className="text-xs text-slate-400">General admission</p>
+                              <p className="text-xs text-slate-600">General admission</p>
                             )}
 
                             <div className="pt-2 flex flex-wrap items-center gap-2">
                               {isCheckedIn ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
                                   <CheckCircle2 className="h-3.5 w-3.5" /> Checked in
                                 </span>
                               ) : isCancelled ? (
-                                <span className="text-[11px] text-rose-400">Cancelled pass</span>
+                                <span className="text-[11px] text-red-600">Cancelled pass</span>
                               ) : (
                                 <>
                                   <button
@@ -291,9 +304,9 @@ export default function MyBookingsPage() {
                                         : 'General Admission';
                                       fetchRollingPass(t.id, t.attendeeName, t.ticketTypeName, seatLabel);
                                     }}
-                                    className="inline-flex items-center gap-1.5 rounded-md border border-cyan-500/30 bg-cyan-950/30 px-2.5 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-900/40 hover:border-cyan-400/50 transition shadow-sm"
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-100 hover:border-sky-300 transition shadow-sm"
                                   >
-                                    <ShieldCheck className="h-3.5 w-3.5 text-cyan-400" />
+                                    <ShieldCheck className="h-3.5 w-3.5 text-sky-700" />
                                     SafeTix™ Live Pass
                                   </button>
                                   <span className="text-[10px] text-slate-500 hidden sm:inline">Rolling code</span>
@@ -314,15 +327,15 @@ export default function MyBookingsPage() {
 
       {/* Cancel Modal */}
       {cancelModalBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-white/[0.1] bg-[#0c101a] p-5 shadow-2xl">
-            <div className="flex items-center gap-2 text-amber-400 mb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-white/70 glass-strong p-5 shadow-xl shadow-indigo-900/10">
+            <div className="flex items-center gap-2 text-indigo-600 mb-3">
               <AlertTriangle className="h-5 w-5" />
-              <h3 className="text-sm font-bold text-white">Cancel booking confirmation</h3>
+              <h3 className="text-sm font-bold text-slate-900">Cancel booking confirmation</h3>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-700 leading-relaxed">
               Are you sure you want to cancel booking{' '}
-              <strong className="text-white">{cancelModalBooking.reference}</strong>?
+              <strong className="text-slate-900">{cancelModalBooking.reference}</strong>?
               Seats will be released immediately to waitlist attendees or live inventory.
             </p>
 
@@ -336,7 +349,7 @@ export default function MyBookingsPage() {
               </button>
               <button
                 onClick={() => setCancelModalBooking(null)}
-                className="rounded-lg border border-white/[0.1] px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white transition"
+                className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-700 hover:text-slate-900 transition"
               >
                 Keep booking
               </button>
@@ -347,32 +360,32 @@ export default function MyBookingsPage() {
 
       {/* SafeTix™ Rolling Pass Modal (Anti-Scalping Dynamic Barcode) */}
       {activeRollingTicket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-          <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-cyan-500/30 bg-[#0b101c] p-6 shadow-[0_0_50px_rgba(6,182,212,0.15)] text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md">
+          <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-white/70 glass-strong p-6 shadow-xl shadow-indigo-900/10 text-center">
             {/* Close Button */}
             <button
               onClick={() => setActiveRollingTicket(null)}
-              className="absolute right-4 top-4 rounded-full p-1 text-slate-400 hover:bg-white/[0.1] hover:text-white transition"
+              className="absolute right-4 top-4 rounded-full p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
             >
               <X className="h-4 w-4" />
             </button>
 
             {/* Header Badge */}
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-950/60 px-3 py-1 text-[11px] font-bold text-cyan-300 tracking-wide uppercase shadow-inner mb-3">
-              <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-700 tracking-wide uppercase shadow-inner mb-3">
+              <ShieldCheck className="h-3.5 w-3.5 text-sky-700 animate-pulse" />
               SafeTix™ Verified Pass
             </div>
 
-            <h3 className="text-base font-bold text-white">{activeRollingTicket.attendeeName}</h3>
-            <p className="text-xs text-amber-300 font-medium">{activeRollingTicket.tierName}</p>
+            <h3 className="text-base font-bold text-slate-900">{activeRollingTicket.attendeeName}</h3>
+            <p className="text-xs text-indigo-600 font-medium">{activeRollingTicket.tierName}</p>
             {activeRollingTicket.seatInfo && (
-              <p className="text-xs text-slate-400 font-mono mt-0.5">{activeRollingTicket.seatInfo}</p>
+              <p className="text-xs text-slate-600 font-mono mt-0.5">{activeRollingTicket.seatInfo}</p>
             )}
 
             {/* Interactive QR Display with Scanline */}
-            <div className="relative mx-auto my-5 flex h-60 w-60 items-center justify-center rounded-2xl border-2 border-cyan-500/40 bg-white p-3 shadow-2xl overflow-hidden">
+            <div className="relative mx-auto my-5 flex h-60 w-60 items-center justify-center rounded-2xl border-2 border-sky-200 bg-white p-3 shadow-lg shadow-indigo-900/10 overflow-hidden">
               {/* Scanline Animation */}
-              <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent animate-bounce opacity-80 pointer-events-none" />
+              <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-500 to-transparent animate-bounce opacity-80 pointer-events-none" />
 
               {activeRollingTicket.qrDataUrl ? (
                 <img
@@ -382,31 +395,31 @@ export default function MyBookingsPage() {
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-600 border-t-transparent" />
                 </div>
               )}
             </div>
 
             {/* Circular Progress Countdown */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400 px-2 font-mono">
+              <div className="flex items-center justify-between text-xs text-slate-600 px-2 font-mono">
                 <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3 text-cyan-400" /> Rotating barcode
+                  <Clock className="h-3 w-3 text-sky-700" /> Rotating barcode
                 </span>
-                <span className="font-bold text-cyan-300">
+                <span className="font-bold text-sky-700">
                   Refreshes in {activeRollingTicket.remainingSeconds}s
                 </span>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+              <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-1000 ease-linear"
+                  className="h-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-1000 ease-linear"
                   style={{ width: `${(activeRollingTicket.remainingSeconds / 15) * 100}%` }}
                 />
               </div>
             </div>
 
             {/* Fraud & Screenshot Warning */}
-            <div className="mt-5 rounded-lg border border-amber-500/20 bg-amber-950/20 p-2.5 text-[11px] text-amber-300 leading-snug">
+            <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 text-[11px] text-indigo-700 leading-snug">
               ⚡ <strong>Anti-Screenshot Protection:</strong> This QR code regenerates cryptographically every 15 seconds. Screenshots will be rejected at the gate scanner.
             </div>
           </div>

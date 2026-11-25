@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 import closeWithGrace from 'close-with-grace';
 import { config } from './config.js';
@@ -13,6 +14,7 @@ import waitlistRoutes from './routes/waitlist.routes.js';
 import checkinRoutes from './routes/checkin.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import adminManageRoutes from './routes/admin-manage.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { securityHeadersMiddleware, createRateLimiter } from './middleware/security.js';
 import { startBackgroundWorker, stopBackgroundWorker } from './services/worker.js';
@@ -22,6 +24,7 @@ import { corsOptions } from './cors.js';
 export const app = express();
 
 app.use(securityHeadersMiddleware);
+app.use(cookieParser());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
 
@@ -55,14 +58,24 @@ app.get('/health', async (req, res) => {
       db: dbCheck.rowCount === 1 ? 'CONNECTED' : 'DISCONNECTED',
       timestamp: new Date().toISOString(),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err }, '[Health] Check failed');
-    res.status(500).json({ status: 'DOWN', error: err.message });
+    res.status(500).json({ status: 'DOWN', error: msg });
   }
 });
 
 // Production Observability: Prometheus Metrics Endpoint (OpenTelemetry / Prometheus Scraper compatible)
 app.get('/metrics', async (req, res) => {
+  const requiredToken = process.env.METRICS_TOKEN;
+  if (requiredToken) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== `Bearer ${requiredToken}`) {
+      res.status(401).send('Unauthorized: Invalid or missing metrics token');
+      return;
+    }
+  }
+
   try {
     const mem = process.memoryUsage();
     const activeHoldsRes = await query(`SELECT count(*) as count FROM holds WHERE expires_at > now()`);
@@ -101,8 +114,8 @@ app.get('/metrics', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
     res.send(metrics);
-  } catch (err: any) {
-    res.status(500).send(`# Error generating metrics: ${err.message}`);
+  } catch (err: unknown) {
+    res.status(500).send(`# Error generating metrics: ${(err instanceof Error ? err.message : String(err))}`);
   }
 });
 
@@ -120,6 +133,7 @@ app.use('/', waitlistRoutes);
 app.use('/', checkinRoutes);
 app.use('/', reportsRoutes);
 app.use('/', adminRoutes);
+app.use('/', adminManageRoutes);
 
 // Centralized error handler
 app.use(errorHandler);
@@ -352,8 +366,8 @@ closeWithGrace({ delay: 10000 }, async ({ signal, err }) => {
   logger.info({ signal }, '[API] Gracefully shutting down...');
   stopBackgroundWorker();
 
-  if (typeof (server as any).closeIdleConnections === 'function') {
-    (server as any).closeIdleConnections();
+  if (typeof typeof (server as unknown as { closeIdleConnections?: () => void }).closeIdleConnections === 'function') {
+    (server as unknown as { closeIdleConnections?: () => void }).closeIdleConnections?.();
   }
 
   await new Promise<void>((resolve, reject) => {

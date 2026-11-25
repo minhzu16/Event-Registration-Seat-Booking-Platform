@@ -28,7 +28,7 @@ export async function findBestAdjacentSeats(
     WHERE es.session_id = $1
       AND (es.status = 'AVAILABLE' OR (es.status = 'HELD' AND es.hold_expires_at < $2))
   `;
-  const params: any[] = [sessionId, now];
+  const params: unknown[] = [sessionId, now];
 
   if (ticketTypeId) {
     params.push(ticketTypeId);

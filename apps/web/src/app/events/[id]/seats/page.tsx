@@ -1,24 +1,23 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import confetti from 'canvas-confetti';
+import { fetchApi, Seat, Session, API_BASE, BookingConfirmation } from '@/lib/api';
 import {
-  ArrowLeft,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  CreditCard,
-  Sparkles,
-  Users,
-  RefreshCw,
-  X,
-  Ticket,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
-import { fetchApi, Seat, Session, API_BASE } from '@/lib/api';
+  SeatMapResponse,
+  HoldResponse,
+  updateSeatsOnHold,
+  updateSeatsOnRelease,
+  updateSeatsOnBooked,
+  updateSeatsOnMyHold,
+  fireBookingConfetti,
+} from '@/components/seats/seat-utils';
+import { SessionHeader } from '@/components/seats/SessionHeader';
+import { SeatMapCanvas } from '@/components/seats/SeatMapCanvas';
+import { HoldPanel } from '@/components/seats/HoldPanel';
+import { CheckoutModal } from '@/components/seats/CheckoutModal';
+import { WaitlistModal } from '@/components/seats/WaitlistModal';
+import { ErrorMessage } from '@/components/seats/ErrorMessage';
 
 export default function SeatMapPage() {
   const params = useParams();
@@ -26,6 +25,7 @@ export default function SeatMapPage() {
   const router = useRouter();
 
   const eventId = params.id as string;
+  void eventId;
   const initialSessionId = searchParams.get('sessionId') || '';
 
   const [session, setSession] = useState<Session | null>(null);
@@ -35,75 +35,35 @@ export default function SeatMapPage() {
   const [loading, setLoading] = useState(true);
   const [sseConnected, setSseConnected] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
-
-  // Active Hold state
   const [activeHoldId, setActiveHoldId] = useState<string | null>(null);
   const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
-
-  // Checkout modal
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'mock_card' | 'momo' | 'vnpay'>('mock_card');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [bookingConfirmed, setBookingConfirmed] = useState<any | null>(null);
+  const [bookingConfirmed, setBookingConfirmed] = useState<BookingConfirmation | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Waitlist state
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState(false);
 
-  useEffect(() => {
-    if (initialSessionId) {
-      loadSeatMap(initialSessionId);
-      connectSse(initialSessionId);
+  function applySeatMap(res: SeatMapResponse) {
+    setSession(res.session);
+    setEventTitle(res.session.event_title || '');
+    setSeats(res.seats || []);
+    const heldByMe = res.seats.filter((s) => s.isHeldByMe);
+    if (heldByMe.length > 0 && heldByMe[0].holdExpiresAt) {
+      setSelectedSeatIds(heldByMe.map((s) => s.id));
+      setHoldExpiresAt(heldByMe[0].holdExpiresAt);
+      if (heldByMe[0].holdId) setActiveHoldId(heldByMe[0].holdId);
     }
-  }, [initialSessionId]);
-
-  // Hold Countdown Timer
-  useEffect(() => {
-    if (!holdExpiresAt) {
-      setSecondsRemaining(null);
-      return;
-    }
-
-    const interval = setInterval(() => {
-      const diff = Math.max(0, Math.floor((new Date(holdExpiresAt).getTime() - Date.now()) / 1000));
-      setSecondsRemaining(diff);
-
-      if (diff === 0) {
-        clearInterval(interval);
-        setActiveHoldId(null);
-        setHoldExpiresAt(null);
-        setSelectedSeatIds([]);
-        setErrorMessage('Your 10-minute hold window expired. Seats were returned to live inventory.');
-        if (initialSessionId) loadSeatMap(initialSessionId);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [holdExpiresAt, initialSessionId]);
+  }
 
   async function loadSeatMap(sessionId: string) {
     try {
-      setLoading(true);
-      const res = await fetchApi<{
-        session: any;
-        seats: Seat[];
-        serverTime: string;
-      }>(`/sessions/${sessionId}/seats`);
-
-      setSession(res.session);
-      setEventTitle(res.session.event_title);
-      setSeats(res.seats || []);
-
-      const heldByMe = res.seats.filter((s) => s.isHeldByMe);
-      if (heldByMe.length > 0 && heldByMe[0].holdExpiresAt) {
-        setSelectedSeatIds(heldByMe.map((s) => s.id));
-        setHoldExpiresAt(heldByMe[0].holdExpiresAt);
-        if (heldByMe[0].holdId) setActiveHoldId(heldByMe[0].holdId);
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Unable to load auditorium seating plan');
+      const res = await fetchApi<SeatMapResponse>(`/sessions/${sessionId}/seats`);
+      applySeatMap(res);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Unable to load auditorium seating plan');
     } finally {
       setLoading(false);
     }
@@ -112,67 +72,58 @@ export default function SeatMapPage() {
   function connectSse(sessionId: string) {
     const sseUrl = `${API_BASE}/sessions/${sessionId}/stream`;
     const eventSource = new EventSource(sseUrl);
-
-    eventSource.onopen = () => {
-      setSseConnected(true);
-    };
-
+    eventSource.onopen = () => setSseConnected(true);
     eventSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.type === 'seat_held') {
-          setSeats((prev) =>
-            prev.map((s) =>
-              payload.seatIds.includes(s.id)
-                ? {
-                    ...s,
-                    status: 'HELD',
-                    isHeldByMe: s.holdId === payload.holdId || s.isHeldByMe,
-                  }
-                : s
-            )
-          );
-        } else if (payload.type === 'seat_released') {
-          setSeats((prev) =>
-            prev.map((s) =>
-              payload.seatIds.includes(s.id)
-                ? {
-                    ...s,
-                    status: 'AVAILABLE',
-                    isHeldByMe: false,
-                    holdId: undefined,
-                    holdExpiresAt: undefined,
-                  }
-                : s
-            )
-          );
-        } else if (payload.type === 'seat_booked') {
-          setSeats((prev) =>
-            prev.map((s) =>
-              payload.seatIds.includes(s.id)
-                ? { ...s, status: 'BOOKED', isHeldByMe: false }
-                : s
-            )
-          );
-        }
+        if (payload.type === 'seat_held') setSeats((prev) => updateSeatsOnHold(prev, payload.seatIds, payload.holdId));
+        else if (payload.type === 'seat_released') setSeats((prev) => updateSeatsOnRelease(prev, payload.seatIds));
+        else if (payload.type === 'seat_booked') setSeats((prev) => updateSeatsOnBooked(prev, payload.seatIds));
       } catch (e) {
         console.error('SSE parse error', e);
       }
     };
-
     eventSource.onerror = () => {
       setSseConnected(false);
       eventSource.close();
       setTimeout(() => connectSse(sessionId), 4000);
     };
-
     return () => eventSource.close();
   }
 
-  function toggleSeatSelection(seat: Seat) {
-    if (activeHoldId) return; // Locked during active hold
-    if (seat.status !== 'AVAILABLE') return;
+  useEffect(() => {
+    if (!initialSessionId) return;
+    let ignore = false;
+    fetchApi<SeatMapResponse>(`/sessions/${initialSessionId}/seats`)
+      .then((res) => { if (!ignore) applySeatMap(res); })
+      .catch((err) => {
+        if (!ignore) setErrorMessage(err instanceof Error ? err.message : 'Unable to load auditorium seating plan');
+      })
+      .finally(() => { if (!ignore) setLoading(false); });
+    const cleanup = connectSse(initialSessionId);
+    return () => { ignore = true; cleanup?.(); };
+  }, [initialSessionId]);
 
+  useEffect(() => {
+    if (!holdExpiresAt) return;
+    const interval = setInterval(() => {
+      const diff = Math.max(0, Math.floor((new Date(holdExpiresAt).getTime() - Date.now()) / 1000));
+      setSecondsRemaining(diff);
+      if (diff === 0) {
+        clearInterval(interval);
+        setActiveHoldId(null);
+        setHoldExpiresAt(null);
+        setSecondsRemaining(null);
+        setSelectedSeatIds([]);
+        setErrorMessage('Your 10-minute hold window expired. Seats were returned to live inventory.');
+        if (initialSessionId) loadSeatMap(initialSessionId);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [holdExpiresAt, initialSessionId]);
+
+  function toggleSeatSelection(seat: Seat) {
+    if (activeHoldId || seat.status !== 'AVAILABLE') return;
     setErrorMessage(null);
     if (selectedSeatIds.includes(seat.id)) {
       setSelectedSeatIds((prev) => prev.filter((id) => id !== seat.id));
@@ -190,32 +141,21 @@ export default function SeatMapPage() {
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
-
-      const res = await fetchApi<{
-        holdId: string;
-        expiresAt: string;
-        secondsRemaining: number;
-      }>(`/sessions/${session.id}/holds`, {
+      const res = await fetchApi<HoldResponse>(`/sessions/${session.id}/holds`, {
         method: 'POST',
-        body: JSON.stringify({
-          seatIds: selectedSeatIds,
-        }),
+        body: JSON.stringify({ seatIds: selectedSeatIds }),
       });
-
       setActiveHoldId(res.holdId);
       setHoldExpiresAt(res.expiresAt);
       setSecondsRemaining(res.secondsRemaining);
-
-      setSeats((prev) =>
-        prev.map((s) =>
-          selectedSeatIds.includes(s.id)
-            ? { ...s, status: 'HELD', isHeldByMe: true, holdId: res.holdId, holdExpiresAt: res.expiresAt }
-            : s
-        )
+      setSeats((prev) => updateSeatsOnMyHold(prev, selectedSeatIds, res.holdId, res.expiresAt));
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : 'Another attendee just held one of your selected seats. Please choose another.'
       );
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Another attendee just held one of your selected seats. Please choose another.');
-      if (session) loadSeatMap(session.id);
+      if (session) { setLoading(true); loadSeatMap(session.id); }
     } finally {
       setIsSubmitting(false);
     }
@@ -226,35 +166,26 @@ export default function SeatMapPage() {
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
-
-      const res = await fetchApi<{
-        booking: any;
-        tickets: any[];
-      }>(`/holds/${activeHoldId}/confirm`, {
+      const res = await fetchApi<BookingConfirmation>(`/holds/${activeHoldId}/confirm`, {
         method: 'POST',
-        body: JSON.stringify({
-          paymentMethod,
-        }),
+        body: JSON.stringify({ paymentMethod }),
       });
-
       setBookingConfirmed(res);
       setActiveHoldId(null);
       setHoldExpiresAt(null);
-
-      confetti({
-        particleCount: 70,
-        spread: 60,
-        origin: { y: 0.6 },
-        colors: ['#f59e0b', '#06b6d4', '#10b981'],
-      });
-    } catch (err: any) {
-      if (err.message && err.message.includes('expired')) {
+      setSecondsRemaining(null);
+      fireBookingConfetti();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('expired')) {
         setErrorMessage('Your hold expired before payment was completed. The seats were released.');
         setIsCheckoutOpen(false);
         setActiveHoldId(null);
+        setHoldExpiresAt(null);
+        setSecondsRemaining(null);
         setSelectedSeatIds([]);
       } else {
-        setErrorMessage(err.message || 'Payment confirmation failed');
+        setErrorMessage(message || 'Payment confirmation failed');
       }
     } finally {
       setIsSubmitting(false);
@@ -267,8 +198,10 @@ export default function SeatMapPage() {
       await fetchApi(`/holds/${activeHoldId}`, { method: 'DELETE' });
       setActiveHoldId(null);
       setHoldExpiresAt(null);
+      setSecondsRemaining(null);
       setSelectedSeatIds([]);
       setIsCheckoutOpen(false);
+      setLoading(true);
       if (session) loadSeatMap(session.id);
     } catch (err) {
       console.error('Failed to release hold', err);
@@ -284,8 +217,8 @@ export default function SeatMapPage() {
         body: JSON.stringify({ quantity: 1 }),
       });
       setWaitlistSuccess(true);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to join waitlist');
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to join waitlist');
     } finally {
       setIsSubmitting(false);
     }
@@ -299,610 +232,63 @@ export default function SeatMapPage() {
         suggestion: { seatIds: string[]; section: string; rowLabel: string; seatNumbers: number[] };
       }>(`/sessions/${session.id}/seats/suggest?quantity=${qty}`);
       setSelectedSeatIds(res.suggestion.seatIds);
-    } catch (err: any) {
-      setErrorMessage(err.message || `No ${qty} adjacent seats available in this tier.`);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : `No ${qty} adjacent seats available in this tier.`
+      );
     }
   }
 
-  const selectedSeatSet = React.useMemo(() => new Set(selectedSeatIds), [selectedSeatIds]);
-  const selectedSeats = React.useMemo(
+  const selectedSeatSet = useMemo(() => new Set(selectedSeatIds), [selectedSeatIds]);
+  const selectedSeats = useMemo(
     () => seats.filter((s) => selectedSeatSet.has(s.id)),
     [seats, selectedSeatSet]
   );
-  const totalPrice = React.useMemo(
+  const totalPrice = useMemo(
     () => selectedSeats.reduce((acc, s) => acc + s.price, 0),
     [selectedSeats]
   );
 
-  const { maxX, maxY } = React.useMemo(() => {
-    let max_x = 500;
-    let max_y = 400;
-    for (const s of seats) {
-      if (s.x > max_x) max_x = s.x;
-      if (s.y > max_y) max_y = s.y;
-    }
-    return { maxX: max_x + 70, maxY: max_y + 70 };
-  }, [seats]);
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/[0.08] pb-4 mb-6">
-        <div>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition mb-1.5"
-          >
-            <ArrowLeft className="h-3 w-3" /> Back to events
-          </Link>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              {eventTitle || 'Reserved seating map'}
-            </h1>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-medium border ${
-                sseConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  sseConnected ? 'bg-emerald-400' : 'bg-amber-400'
-                }`}
-              />
-              {sseConnected ? 'Live sync connected' : 'Connecting stream...'}
-            </span>
-          </div>
-        </div>
+      <SessionHeader
+        eventTitle={eventTitle} sseConnected={sseConnected}
+        secondsRemaining={secondsRemaining} onOpenCheckout={() => setIsCheckoutOpen(true)}
+      />
 
-        {/* Live Hold Timer HUD */}
-        {secondsRemaining !== null && (
-          <div
-            className={`flex items-center gap-3 rounded-lg px-3.5 py-2 border transition-all ${
-              secondsRemaining < 60
-                ? 'border-rose-500/60 bg-rose-950/40 animate-pulse text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
-                : 'border-amber-500/30 bg-[#14120a]'
-            }`}
-          >
-            <Clock
-              className={`h-4 w-4 ${
-                secondsRemaining < 60
-                  ? 'text-rose-400 animate-spin'
-                  : secondsRemaining < 180
-                  ? 'text-amber-400 animate-pulse'
-                  : 'text-amber-400'
-              }`}
-            />
-            <div>
-              <p
-                className={`text-[10px] font-medium ${
-                  secondsRemaining < 60 ? 'text-rose-400 font-bold' : 'text-amber-400/90'
-                }`}
-              >
-                {secondsRemaining < 60 ? 'Expiring soon!' : 'Hold active'}
-              </p>
-              <p className="text-base font-bold text-white font-mono leading-none">
-                {Math.floor(secondsRemaining / 60)}:{(secondsRemaining % 60).toString().padStart(2, '0')}
-              </p>
-            </div>
-            <button
-              onClick={() => setIsCheckoutOpen(true)}
-              className={`ml-2 rounded px-3 py-1.5 text-xs font-semibold transition ${
-                secondsRemaining < 60
-                  ? 'bg-rose-500 text-white hover:bg-rose-400'
-                  : 'bg-amber-500 text-slate-950 hover:bg-amber-400'
-              }`}
-            >
-              Confirm & pay
-            </button>
-          </div>
-        )}
-      </div>
+      <ErrorMessage message={errorMessage} onDismiss={() => setErrorMessage(null)} />
 
-      {errorMessage && (
-        <div className="mb-5 flex items-center justify-between rounded-lg border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-300">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-            <span>{errorMessage}</span>
-          </div>
-          <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-white">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Main Seat Map Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left: SVG Stage & Auditorium */}
-        <div className="lg:col-span-3 flex flex-col items-center justify-center rounded-xl border border-white/[0.08] bg-[#0c101a] p-6 shadow-sm overflow-hidden">
-          {/* Stage Focal Point with Acoustic Spotlight (Taste Skill Polish) */}
-          <div className="w-full max-w-lg mb-6 flex flex-col items-center">
-            <div className="relative w-full overflow-hidden rounded-t-[100px] border-t-2 border-amber-400/40 bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-transparent h-12 flex items-center justify-center shadow-[0_-10px_30px_rgba(245,158,11,0.15)]">
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-400/20 via-transparent to-transparent pointer-events-none" />
-              <span className="text-[11px] font-bold tracking-widest uppercase text-amber-300 drop-shadow-sm flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Acoustic Center Stage
-              </span>
-            </div>
-            <div className="w-3/4 h-[1px] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent" />
-          </div>
+        <SeatMapCanvas
+          seats={seats} selectedSeatSet={selectedSeatSet}
+          activeHoldId={activeHoldId} loading={loading}
+          zoomScale={zoomScale} onZoomChange={setZoomScale}
+          onToggleSeat={toggleSeatSelection}
+        />
 
-          {/* Zoom and Map View Controls (UI/UX Pro Max) */}
-          <div className="w-full flex items-center justify-between px-2 pb-2 mb-2 border-b border-white/[0.04]">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-slate-400">Scale: {Math.round(zoomScale * 100)}%</span>
-            </div>
-            <div className="flex items-center gap-1 bg-[#121824] p-1 rounded-lg border border-white/[0.08]">
-              <button
-                onClick={() => setZoomScale((prev) => Math.max(0.7, Number((prev - 0.15).toFixed(2))))}
-                className="p-1 rounded text-slate-300 hover:text-white hover:bg-white/[0.06] transition"
-                title="Zoom Out"
-              >
-                <ZoomOut className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => setZoomScale(1)}
-                className="px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-white/[0.06] rounded transition"
-                title="Reset Zoom"
-              >
-                100%
-              </button>
-              <button
-                onClick={() => setZoomScale((prev) => Math.min(1.8, Number((prev + 0.15).toFixed(2))))}
-                className="p-1 rounded text-slate-300 hover:text-white hover:bg-white/[0.06] transition"
-                title="Zoom In"
-              >
-                <ZoomIn className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* SVG Map Container */}
-          <div className="w-full overflow-x-auto flex justify-center py-2">
-            {loading ? (
-              <div className="py-20 text-center">
-                <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-                <p className="mt-2 text-xs text-slate-400">Loading seat layout...</p>
-              </div>
-            ) : (
-              <div
-                style={{
-                  transform: `scale(${zoomScale})`,
-                  transformOrigin: 'top center',
-                  transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                }}
-              >
-                <svg
-                  width={maxX}
-                  height={maxY}
-                  className="select-none"
-                  viewBox={`0 0 ${maxX} ${maxY}`}
-                >
-                  {seats.map((seat) => {
-                    const isSelected = selectedSeatSet.has(seat.id);
-                    const isHeldByMe = seat.isHeldByMe || (isSelected && activeHoldId);
-                    const isHeldByOther = seat.status === 'HELD' && !isHeldByMe;
-                    const isBooked = seat.status === 'BOOKED';
-                    const isBlocked = seat.status === 'BLOCKED';
-
-                    let fillColor = seat.color || '#38bdf8';
-                    let strokeColor = 'rgba(255,255,255,0.15)';
-                    let opacity = 1;
-                    let cursor = 'pointer';
-
-                    if (isBooked) {
-                      fillColor = '#1e293b';
-                      strokeColor = '#0f172a';
-                      opacity = 0.45;
-                      cursor = 'not-allowed';
-                    } else if (isBlocked) {
-                      fillColor = '#0f172a';
-                      strokeColor = '#020617';
-                      opacity = 0.25;
-                      cursor = 'not-allowed';
-                    } else if (isHeldByOther) {
-                      fillColor = '#dc2626';
-                      strokeColor = '#f87171';
-                      cursor = 'not-allowed';
-                    } else if (isHeldByMe || isSelected) {
-                      fillColor = '#f59e0b';
-                      strokeColor = '#fbbf24';
-                    }
-
-                    return (
-                      <g
-                        key={seat.id}
-                        onClick={() => toggleSeatSelection(seat)}
-                        className="transition-transform duration-100 hover:scale-105"
-                        style={{ cursor }}
-                      >
-                        {/* 44px Accessible Touch Hitbox (WCAG 2.5.5) */}
-                        <circle
-                          cx={seat.x}
-                          cy={seat.y}
-                          r={22}
-                          fill="transparent"
-                        />
-                        <circle
-                          cx={seat.x}
-                          cy={seat.y}
-                          r={13}
-                          fill={fillColor}
-                          stroke={strokeColor}
-                          strokeWidth={isSelected ? 2.5 : 1}
-                          opacity={opacity}
-                        />
-                        <text
-                          x={seat.x}
-                          y={seat.y + 4}
-                          textAnchor="middle"
-                          fontSize="9"
-                          fontWeight="600"
-                          fill={isBooked ? '#64748b' : '#ffffff'}
-                          className="pointer-events-none"
-                        >
-                          {seat.seatNumber}
-                        </text>
-                        {/* Color-blind accessible indicator glyphs */}
-                        {isSelected && (
-                          <circle cx={seat.x + 8} cy={seat.y - 8} r={3.5} fill="#10b981" stroke="#ffffff" strokeWidth="1" />
-                        )}
-                        {isBooked && (
-                          <line x1={seat.x - 4} y1={seat.y - 4} x2={seat.x + 4} y2={seat.y + 4} stroke="#475569" strokeWidth="1.5" />
-                        )}
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-            )}
-          </div>
-
-          {/* Seat Legend */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-5 border-t border-white/[0.06] pt-5 text-xs text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-cyan-500 border border-cyan-400" />
-              <span>Available</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-amber-500 border border-amber-400 flex items-center justify-center">
-                <span className="h-1 w-1 rounded-full bg-white" />
-              </span>
-              <span>Selected (Yours)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-rose-600 border border-rose-400" />
-              <span>Held by others</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
-                <span className="h-0.5 w-1.5 bg-slate-500" />
-              </span>
-              <span>Booked</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Reservation Panel */}
-        <div className="flex flex-col justify-between rounded-xl border border-white/[0.08] bg-[#0c101a] p-5 shadow-sm">
-          <div>
-            <h3 className="text-sm font-bold text-white mb-3">
-              Seat reservation
-            </h3>
-
-            {/* Adjacent seat quick picker */}
-            {!activeHoldId && (
-              <div className="mb-4 rounded-lg border border-white/[0.06] bg-[#121824] p-3">
-                <span className="text-[11px] font-medium text-slate-300 block mb-2">
-                  Auto-find adjacent seats
-                </span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    onClick={() => handleSuggestSeats(2)}
-                    className="rounded border border-white/[0.1] bg-[#182234] px-2 py-1 text-xs font-medium text-slate-200 hover:border-amber-400/50 transition"
-                  >
-                    2 seats
-                  </button>
-                  <button
-                    onClick={() => handleSuggestSeats(3)}
-                    className="rounded border border-white/[0.1] bg-[#182234] px-2 py-1 text-xs font-medium text-slate-200 hover:border-amber-400/50 transition"
-                  >
-                    3 seats
-                  </button>
-                  <button
-                    onClick={() => handleSuggestSeats(4)}
-                    className="rounded border border-white/[0.1] bg-[#182234] px-2 py-1 text-xs font-medium text-slate-200 hover:border-amber-400/50 transition"
-                  >
-                    4 seats
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {selectedSeats.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-white/[0.08] p-5 text-center text-xs text-slate-400">
-                Click any available seat on the map or pick adjacent seats above.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {selectedSeats.map((seat) => (
-                  <div
-                    key={seat.id}
-                    className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-[#121824] p-2.5 text-xs"
-                  >
-                    <div>
-                      <p className="font-semibold text-white">
-                        {seat.section} • Row {seat.rowLabel}-{seat.seatNumber}
-                      </p>
-                      <p className="text-[11px] text-slate-400">{seat.tierName}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-amber-300">
-                        {seat.price.toLocaleString('vi-VN')} ₫
-                      </span>
-                      {!activeHoldId && (
-                        <button
-                          onClick={() => toggleSeatSelection(seat)}
-                          className="text-slate-400 hover:text-rose-400"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Price breakdown */}
-            <div className="mt-5 border-t border-white/[0.06] pt-3.5 space-y-1.5 text-xs">
-              <div className="flex justify-between text-slate-400">
-                <span>Tickets ({selectedSeats.length})</span>
-                <span>{totalPrice.toLocaleString('vi-VN')} ₫</span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Processing fee</span>
-                <span className="text-emerald-400 font-medium">0 ₫</span>
-              </div>
-              <div className="flex justify-between text-sm font-bold text-white border-t border-white/[0.06] pt-2">
-                <span>Total amount</span>
-                <span className="text-amber-400">{totalPrice.toLocaleString('vi-VN')} ₫</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Area */}
-          <div className="mt-6 space-y-2.5">
-            {!activeHoldId ? (
-              <button
-                disabled={selectedSeatIds.length === 0 || isSubmitting}
-                onClick={handleCreateHold}
-                className="w-full rounded-lg bg-amber-500 py-3 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Locking seats...
-                  </>
-                ) : (
-                  <>
-                    <Clock className="h-3.5 w-3.5" /> Hold seats for 10 minutes
-                  </>
-                )}
-              </button>
-            ) : (
-              <div className="space-y-2">
-                <button
-                  onClick={() => setIsCheckoutOpen(true)}
-                  className="w-full rounded-lg bg-emerald-600 py-3 text-xs font-semibold text-white hover:bg-emerald-500 transition flex items-center justify-center gap-2"
-                >
-                  <CreditCard className="h-3.5 w-3.5" /> Confirm and pay
-                </button>
-                <button
-                  onClick={handleReleaseHold}
-                  className="w-full rounded-lg border border-white/[0.1] bg-[#121824] py-2 text-xs font-medium text-slate-400 hover:text-white transition"
-                >
-                  Release hold
-                </button>
-              </div>
-            )}
-
-            {/* Waiting list */}
-            <button
-              onClick={() => setWaitlistOpen(true)}
-              className="w-full text-center text-xs text-slate-400 hover:text-amber-400 transition py-1"
-            >
-              Seats full? <span className="underline">Join waiting list</span>
-            </button>
-          </div>
-        </div>
+        <HoldPanel
+          selectedSeats={selectedSeats} totalPrice={totalPrice}
+          activeHoldId={activeHoldId} isSubmitting={isSubmitting}
+          onSuggestSeats={handleSuggestSeats} onToggleSeatSelection={toggleSeatSelection}
+          onCreateHold={handleCreateHold} onOpenCheckout={() => setIsCheckoutOpen(true)}
+          onReleaseHold={handleReleaseHold} onOpenWaitlist={() => setWaitlistOpen(true)}
+        />
       </div>
 
-      {/* Checkout Modal */}
-      {isCheckoutOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-white/[0.1] bg-[#0c101a] p-6 shadow-2xl">
-            {bookingConfirmed ? (
-              <div className="text-center py-2">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 mb-3">
-                  <CheckCircle2 className="h-8 w-8" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Reservation confirmed</h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  Reference: <span className="font-mono text-amber-400 font-semibold">{bookingConfirmed.booking.reference}</span>
-                </p>
+      <CheckoutModal
+        isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)}
+        bookingConfirmed={bookingConfirmed} paymentMethod={paymentMethod}
+        setPaymentMethod={setPaymentMethod} selectedSeatsCount={selectedSeats.length}
+        totalPrice={totalPrice} isSubmitting={isSubmitting}
+        onConfirmBooking={handleConfirmBooking}
+        onDone={() => { setIsCheckoutOpen(false); router.push('/'); }}
+      />
 
-                {/* Issued Tickets with HMAC QR */}
-                <div className="mt-5 rounded-lg border border-white/[0.08] bg-[#080b11] p-4 text-left space-y-3">
-                  <p className="text-xs font-semibold text-slate-300">Issued entrance passes:</p>
-                  <div className="flex gap-3 overflow-x-auto py-1">
-                    {bookingConfirmed.tickets.map((t: any) => (
-                      <div
-                        key={t.id}
-                        className="flex flex-col items-center rounded-lg bg-white p-3 shrink-0"
-                      >
-                        {t.qrDataUrl && (
-                          <img src={t.qrDataUrl} alt="QR Code" className="h-28 w-28 object-contain" />
-                        )}
-                        <p className="mt-1.5 text-[10px] font-bold text-slate-900">{t.attendee_name}</p>
-                        <p className="text-[9px] text-slate-500 font-mono truncate max-w-[110px]">
-                          {t.code.substring(0, 14)}...
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5 flex gap-2.5">
-                  <Link
-                    href="/bookings"
-                    className="flex-1 rounded-lg bg-amber-500 py-2.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition"
-                  >
-                    View tickets in passes
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setIsCheckoutOpen(false);
-                      router.push('/');
-                    }}
-                    className="rounded-lg border border-white/[0.1] px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white transition"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center justify-between border-b border-white/[0.08] pb-3 mb-5">
-                  <div>
-                    <h3 className="text-base font-bold text-white">Payment and confirmation</h3>
-                    <p className="text-xs text-slate-400">Simulated payment gateway</p>
-                  </div>
-                  <button
-                    onClick={() => setIsCheckoutOpen(false)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-4 text-xs">
-                  <div>
-                    <label className="text-slate-300 font-medium block mb-2">Payment method</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        onClick={() => setPaymentMethod('mock_card')}
-                        className={`rounded-lg border p-2.5 text-center transition ${
-                          paymentMethod === 'mock_card'
-                            ? 'border-amber-400 bg-amber-500/10 text-amber-300 font-semibold'
-                            : 'border-white/[0.08] bg-[#121824] text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Direct Card
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('momo')}
-                        className={`rounded-lg border p-2.5 text-center transition ${
-                          paymentMethod === 'momo'
-                            ? 'border-pink-500 bg-pink-500/10 text-pink-300 font-semibold'
-                            : 'border-white/[0.08] bg-[#121824] text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        MoMo
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('vnpay')}
-                        className={`rounded-lg border p-2.5 text-center transition ${
-                          paymentMethod === 'vnpay'
-                            ? 'border-cyan-500 bg-cyan-500/10 text-cyan-300 font-semibold'
-                            : 'border-white/[0.08] bg-[#121824] text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        VNPay
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-white/[0.08] bg-[#080b11] p-3.5 space-y-1.5">
-                    <div className="flex justify-between text-slate-400">
-                      <span>Seats locked:</span>
-                      <span className="text-white font-medium">{selectedSeats.length} seats</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Total:</span>
-                      <span className="text-amber-400 font-bold text-sm">
-                        {totalPrice.toLocaleString('vi-VN')} ₫
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    disabled={isSubmitting}
-                    onClick={handleConfirmBooking}
-                    className="w-full rounded-lg bg-emerald-600 py-3 text-xs font-semibold text-white hover:bg-emerald-500 transition disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Authorizing payment...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Pay {totalPrice.toLocaleString('vi-VN')} ₫
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Waitlist Modal */}
-      {waitlistOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-white/[0.1] bg-[#0c101a] p-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-2.5 mb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Users className="h-4 w-4 text-amber-400" />
-                Join waiting list
-              </h3>
-              <button onClick={() => setWaitlistOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {waitlistSuccess ? (
-              <div className="text-center py-3 space-y-2">
-                <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400" />
-                <p className="text-xs font-semibold text-white">Added to waiting list</p>
-                <p className="text-xs text-slate-400">
-                  When a seat expires or is released, the scheduler automatically reserves a 24-hour hold offer for you.
-                </p>
-                <button
-                  onClick={() => setWaitlistOpen(false)}
-                  className="rounded-lg bg-amber-500 px-5 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition mt-2"
-                >
-                  Understood
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3 text-xs">
-                <p className="text-slate-300 leading-relaxed">
-                  When seats become available via cancellations or expired holds, the system automatically allocates the next ticket to waiting attendees.
-                </p>
-                <button
-                  disabled={isSubmitting}
-                  onClick={handleJoinWaitlist}
-                  className="w-full rounded-lg bg-amber-500 py-2.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Adding...' : 'Confirm position in queue'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <WaitlistModal
+        isOpen={waitlistOpen} onClose={() => setWaitlistOpen(false)}
+        waitlistSuccess={waitlistSuccess} isSubmitting={isSubmitting}
+        onJoinWaitlist={handleJoinWaitlist}
+      />
     </div>
   );
 }

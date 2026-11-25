@@ -1,14 +1,14 @@
 export interface AppErrorOptions {
   code: string;
   statusCode?: number;
-  details?: any;
+  details?: unknown;
   cause?: unknown;
 }
 
 export class AppError extends Error {
   public readonly code: string;
   public readonly statusCode: number;
-  public readonly details?: any;
+  public readonly details?: unknown;
 
   constructor(message: string, options: AppErrorOptions) {
     super(message, options.cause ? { cause: options.cause } : undefined);
@@ -21,7 +21,7 @@ export class AppError extends Error {
 }
 
 export class NotFoundError extends AppError {
-  constructor(resource: string, details?: any) {
+  constructor(resource: string, details?: unknown) {
     super(`${resource} not found`, {
       code: 'NOT_FOUND',
       statusCode: 404,
@@ -31,7 +31,7 @@ export class NotFoundError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, details?: any) {
+  constructor(message: string, details?: unknown) {
     super(message, {
       code: 'VALIDATION_ERROR',
       statusCode: 400,
@@ -41,7 +41,7 @@ export class ValidationError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string, details?: any) {
+  constructor(message: string, details?: unknown) {
     super(message, {
       code: 'CONFLICT',
       statusCode: 409,
@@ -51,7 +51,7 @@ export class ConflictError extends AppError {
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message: string = 'Authentication required', details?: any) {
+  constructor(message: string = 'Authentication required', details?: unknown) {
     super(message, {
       code: 'UNAUTHORIZED',
       statusCode: 401,
@@ -61,7 +61,7 @@ export class UnauthorizedError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message: string = 'Access denied', details?: any) {
+  constructor(message: string = 'Access denied', details?: unknown) {
     super(message, {
       code: 'FORBIDDEN',
       statusCode: 403,
@@ -82,4 +82,26 @@ export class DatabaseError extends AppError {
 
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
+}
+
+/**
+ * Domain error carrying exact HTTP status code and flat JSON payload for route responses.
+ */
+export class DomainHttpError extends AppError {
+  public readonly payload: Record<string, unknown>;
+
+  constructor(
+    statusCode: number,
+    code: string,
+    message?: string,
+    extra?: Record<string, unknown>,
+    cause?: unknown
+  ) {
+    super(message ?? code, { code, statusCode, details: extra, cause });
+    this.payload = {
+      error: code,
+      ...(message !== undefined ? { message } : {}),
+      ...extra,
+    };
+  }
 }

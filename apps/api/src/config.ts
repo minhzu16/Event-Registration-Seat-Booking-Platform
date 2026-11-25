@@ -7,10 +7,10 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().default('postgresql://postgres@127.0.0.1:5433/event_platform'),
   // Required in every environment: a missing or short secret stops the API at boot (see .env.example).
-  JWT_SECRET: z.string({ required_error: 'JWT_SECRET is required' }).min(32, 'JWT_SECRET must be at least 32 characters'),
+  JWT_SECRET: z.string({ error: 'JWT_SECRET is required' }).min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   QR_HMAC_SECRET: z
-    .string({ required_error: 'QR_HMAC_SECRET is required' })
+    .string({ error: 'QR_HMAC_SECRET is required' })
     .min(32, 'QR_HMAC_SECRET must be at least 32 characters'),
   // Browser origins allowed to call the API (comma-separated).
   CORS_ORIGINS: z.string().default('http://localhost:3000'),

@@ -1,3 +1,6 @@
+> ⚠️ **Tài liệu do AI tạo, chưa được đo hay kiểm chứng.** Các số liệu, điểm số và benchmark dưới đây không có test
+> hay phép đo nào chứng minh. Đánh giá hiện hành: `../scorecard_and_upgrade_plan.md` (thư mục gốc self_project).
+
 Dưới đây là Bản đánh giá kỹ thuật và Kế hoạch nâng cấp tổng thể (Master Implementation Plan) cho hệ thống SeatLock pj1, được biên soạn theo định hướng chuyên sâu của Kiến trúc sư trưởng.
 
 1. Bảng Chấm điểm Dự án SeatLock pj1 (Thang điểm 100)

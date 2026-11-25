@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
+import { SkipToContent } from '@/components/SkipToContent';
 
 export const metadata: Metadata = {
   title: 'SeatLock — Event Registration & Zero-Collision Seat Booking Platform',
@@ -14,20 +15,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-[#080b11] text-slate-100 antialiased flex flex-col selection:bg-amber-500/20 selection:text-amber-300">
+    <html lang="en">
+      <body className="min-h-screen antialiased flex flex-col selection:bg-indigo-500/20 selection:text-indigo-700">
+        <SkipToContent />
         <Navbar />
-        <main className="flex-1 pb-16">{children}</main>
-        <footer className="border-t border-white/[0.08] py-8 text-xs text-slate-400 bg-[#06080e]">
+        <main id="main-content" tabIndex={-1} className="flex-1 pb-16 focus:outline-none">{children}</main>
+        <footer className="glass-strong border-t border-white/70 py-8 text-xs text-slate-600">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="font-semibold text-slate-300">SeatLock</span>
-              <span className="text-slate-600">|</span>
+              <span className="font-semibold text-slate-800">SeatLock</span>
+              <span className="text-slate-400">|</span>
               <span>PostgreSQL 18 Row Locking & Real-time SSE Dispatch</span>
             </div>
-            <div className="flex items-center gap-4 text-slate-400">
-              <span className="flex items-center gap-1.5 text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <div className="flex items-center gap-4 text-slate-600">
+              <span className="flex items-center gap-1.5 text-emerald-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                 ACID Isolation Guarantee
               </span>
             </div>

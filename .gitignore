@@ -48,3 +48,6 @@ coverage/
 .turbo/
 
 
+
+# Local agent tooling
+.agents/

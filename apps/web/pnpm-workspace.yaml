@@ -14,3 +14,6 @@ minimumReleaseAgeExclude:
   - '@next/swc-win32-x64-msvc@16.3.8'
   - eslint-config-next@16.3.8
   - next@16.3.8
+# Security floor for transitive deps flagged by `pnpm audit` (postcss -> source-map-js).
+overrides:
+  source-map-js: '>=1.2.2'

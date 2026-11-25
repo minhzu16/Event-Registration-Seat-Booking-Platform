@@ -8,6 +8,11 @@ allowBuilds:
 
 minimumReleaseAge: 0
 
+# Security floors for transitive deps flagged by `pnpm audit`.
+overrides:
+  source-map-js: '>=1.2.2'
+  body-parser@<1.20.9: '>=1.20.9 <2'
+
 onlyBuiltDependencies:
   - esbuild
   - unrs-resolver

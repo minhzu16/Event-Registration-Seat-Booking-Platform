@@ -62,9 +62,9 @@ router.post(
         entry: insertRes.rows[0],
         position: Number(posRes.rows[0]?.position || 1),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
         return;
       }
       console.error('[Join Waitlist Error]', error);

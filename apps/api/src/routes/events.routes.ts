@@ -23,7 +23,7 @@ router.get('/events', async (req: Request, res: Response): Promise<void> => {
       JOIN organisers o ON e.organiser_id = o.id
       WHERE e.status = 'PUBLISHED'
     `;
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (q) {
       params.push(`%${q}%`);
@@ -185,9 +185,9 @@ router.post(
       });
 
       res.status(201).json({ event: createdEvent });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
         return;
       }
       console.error('[Create Event Error]', error);
@@ -254,9 +254,9 @@ router.put(
       }
 
       res.json({ event: updateRes.rows[0] });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
         return;
       }
       res.status(500).json({ error: 'INTERNAL_ERROR' });
@@ -318,9 +318,9 @@ router.post(
       });
 
       res.status(201).json({ message: 'Seat map generated successfully', seatsGenerated: count });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
         return;
       }
       console.error('[Generate Seatmap Error]', error);

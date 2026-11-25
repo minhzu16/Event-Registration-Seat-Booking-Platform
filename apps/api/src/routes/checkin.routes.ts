@@ -129,9 +129,9 @@ router.post(
       }
 
       res.status(400).json({ result: 'INVALID', message: 'Unable to check in ticket' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.errors });
+        res.status(400).json({ error: 'VALIDATION_ERROR', details: error.issues });
         return;
       }
       console.error('[Checkin Error]', error);

@@ -3,8 +3,18 @@ import { logger } from '../logger.js';
 import { isAppError } from '../errors.js';
 import { ZodError } from 'zod';
 
+interface ExpressErrorWithDetails {
+  code?: string;
+  statusCode?: number;
+  details?: unknown;
+  detail?: string;
+  message?: string;
+  stack?: string;
+  cause?: unknown;
+}
+
 export const errorHandler: ErrorRequestHandler = (
-  err: any,
+  err: ExpressErrorWithDetails,
   req: Request,
   res: Response,
   next: NextFunction
@@ -16,10 +26,11 @@ export const errorHandler: ErrorRequestHandler = (
 
   // 1. AppError instances (domain errors)
   if (isAppError(err)) {
+    const statusCode = err.statusCode ?? 500;
     logger.warn(
       {
         code: err.code,
-        statusCode: err.statusCode,
+        statusCode,
         details: err.details,
         path: req.originalUrl,
         method: req.method,
@@ -28,7 +39,7 @@ export const errorHandler: ErrorRequestHandler = (
       `[Domain Error] ${err.message}`
     );
 
-    res.status(err.statusCode).json({
+    res.status(statusCode).json({
       error: {
         code: err.code,
         message: err.message,

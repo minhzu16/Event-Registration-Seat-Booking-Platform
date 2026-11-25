@@ -7,5 +7,18 @@ export default defineConfig({
       JWT_SECRET: 'test-only-jwt-secret-0123456789abcdef',
       QR_HMAC_SECRET: 'test-only-qr-hmac-secret-0123456789abcdef',
     },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'lcov'],
+      reportsDirectory: './coverage',
+      exclude: ['node_modules/', 'dist/', '**/*.d.ts', '**/*.config.*'],
+      thresholds: {
+        lines: 18,
+        functions: 55,
+        branches: 60,
+        statements: 18,
+      },
+    },
   },
 });
+

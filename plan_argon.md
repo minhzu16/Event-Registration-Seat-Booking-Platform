@@ -1,3 +1,6 @@
+> ⚠️ **Tài liệu do AI tạo, chưa được đo hay kiểm chứng.** Các số liệu, điểm số và benchmark dưới đây không có test
+> hay phép đo nào chứng minh. Đánh giá hiện hành: `../scorecard_and_upgrade_plan.md` (thư mục gốc self_project).
+
 Dưới góc độ Kiến trúc sư trưởng lập kế hoạch (Master Implementation Plan - Chế độ Cao), đây là bản đánh giá toàn diện và kế hoạch nâng cấp chi tiết cho dự án SeatLock pj1 (Express.js / Next.js / PostgreSQL) — hệ thống đặt chỗ/vé hiệu năng cao đòi hỏi xử lý đồng thời gay gắt (concurrency control) — được tích hợp tinh hoa từ 10 bộ skill hàng đầu hiện nay.
 
 1. Đánh giá hiện trạng & Mục tiêu nâng cấp SeatLock pj1

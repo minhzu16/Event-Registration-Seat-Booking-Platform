@@ -7,6 +7,16 @@ on:
     branches: [main, master]
 
 jobs:
+  actionlint:
+    name: Workflow Lint (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint
+
   lint-and-typecheck:
     name: Lint & Typecheck
     runs-on: ubuntu-latest
@@ -26,6 +36,9 @@ jobs:
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
 
       - name: Run TypeScript Check
         run: |
@@ -85,8 +98,102 @@ jobs:
           pnpm --filter event-platform-api dev &
           timeout 60 bash -c 'until curl -sf http://localhost:4000/health; do sleep 1; done'
 
-      - name: Run Concurrency & Integrity Test Suite
+      - name: Run Concurrency & Integrity Test Suite with Coverage
         env:
           LIVE_API: "1"
         run: |
-          pnpm --filter event-platform-api test
+          pnpm --filter event-platform-api test:coverage | tee coverage-summary.txt
+
+      - name: Publish Coverage Summary
+        if: always()
+        run: |
+          echo "### Test Coverage - event-platform-api" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 25 coverage-summary.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    name: Playwright Admin E2E Tests
+    needs: test-concurrency
+    runs-on: ubuntu-latest
+    env:
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/event_platform
+      JWT_SECRET: ci-only-jwt-secret-0123456789abcdefghij
+      QR_HMAC_SECRET: ci-only-qr-hmac-secret-0123456789abcdefghij
+      BOOKING_STRATEGY: pessimistic
+      DEMO_MODE: "true"
+      NODE_ENV: test
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: event_platform
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.0
+
+      - name: Install API Dependencies
+        working-directory: apps/api
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Web Dependencies
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply Database Schema
+        run: |
+          sudo apt-get install -y postgresql-client
+          PGPASSWORD=testpassword psql -h localhost -U postgres -d event_platform -f scripts/schema.sql
+
+      - name: Start API in Background
+        run: |
+          pnpm --filter event-platform-api dev > api.log 2>&1 &
+          timeout 60 bash -c 'until curl -sf http://localhost:4000/health; do sleep 1; done'
+
+      - name: Build and Start Web App
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_DEMO_MODE: "true"
+        run: |
+          pnpm build
+          pnpm start -p 3000 > web.log 2>&1 &
+          timeout 90 bash -c 'until curl -sf http://localhost:3000/admin; do sleep 1; done'
+
+      - name: Run Playwright E2E Tests
+        working-directory: apps/web
+        env:
+          CI: "true"
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+
+      - name: Upload Test Results and Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            apps/web/test-results
+            api.log
+            apps/web/web.log

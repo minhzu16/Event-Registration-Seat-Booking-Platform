@@ -18,7 +18,7 @@ pool.on('error', (err) => {
 
 export async function query<T extends pg.QueryResultRow = any>(
   text: string,
-  params?: any[]
+  params?: unknown[]
 ): Promise<pg.QueryResult<T>> {
   const start = Date.now();
   try {
@@ -31,12 +31,13 @@ export async function query<T extends pg.QueryResultRow = any>(
       );
     }
     return res;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error(
-      { query: text.substring(0, 150), params, err: error.message },
+      { query: text.substring(0, 150), params, err: message },
       '[DB Query Error]'
     );
-    throw new DatabaseError(error.message, error);
+    throw new DatabaseError(message, error);
   }
 }
 
