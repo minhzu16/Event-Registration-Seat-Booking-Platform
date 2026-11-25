@@ -156,12 +156,7 @@ jobs:
         with:
           version: 11.15.0
 
-      - name: Install API Dependencies
-        working-directory: apps/api
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Web Dependencies
-        working-directory: apps/web
+      - name: Install Workspace Dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Apply Database Schema
