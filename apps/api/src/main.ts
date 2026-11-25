@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 import closeWithGrace from 'close-with-grace';
@@ -17,16 +18,19 @@ import adminRoutes from './routes/admin.routes.js';
 import adminManageRoutes from './routes/admin-manage.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { securityHeadersMiddleware, createRateLimiter } from './middleware/security.js';
+import { createMetricsHandler, metricsMiddleware } from './metrics.js';
 import { startBackgroundWorker, stopBackgroundWorker } from './services/worker.js';
 import { bootstrapAdmin } from './seed-admin.js';
 import { corsOptions } from './cors.js';
 
 export const app = express();
 
+app.use(helmet());
 app.use(securityHeadersMiddleware);
 app.use(cookieParser());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
+app.use(metricsMiddleware);
 
 // Request structured logging middleware
 app.use((req, res, next) => {
@@ -66,58 +70,7 @@ app.get('/health', async (req, res) => {
 });
 
 // Production Observability: Prometheus Metrics Endpoint (OpenTelemetry / Prometheus Scraper compatible)
-app.get('/metrics', async (req, res) => {
-  const requiredToken = process.env.METRICS_TOKEN;
-  if (requiredToken) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== `Bearer ${requiredToken}`) {
-      res.status(401).send('Unauthorized: Invalid or missing metrics token');
-      return;
-    }
-  }
-
-  try {
-    const mem = process.memoryUsage();
-    const activeHoldsRes = await query(`SELECT count(*) as count FROM holds WHERE expires_at > now()`);
-    const activeHolds = Number(activeHoldsRes.rows[0]?.count || 0);
-
-    const metrics = [
-      '# HELP seatlock_uptime_seconds Process uptime in seconds.',
-      '# TYPE seatlock_uptime_seconds gauge',
-      `seatlock_uptime_seconds ${process.uptime().toFixed(2)}`,
-      '',
-      '# HELP seatlock_memory_rss_bytes Resident set size in bytes.',
-      '# TYPE seatlock_memory_rss_bytes gauge',
-      `seatlock_memory_rss_bytes ${mem.rss}`,
-      '',
-      '# HELP seatlock_memory_heap_used_bytes Heap memory used in bytes.',
-      '# TYPE seatlock_memory_heap_used_bytes gauge',
-      `seatlock_memory_heap_used_bytes ${mem.heapUsed}`,
-      '',
-      '# HELP seatlock_db_pool_total_connections Total pool connection limit.',
-      '# TYPE seatlock_db_pool_total_connections gauge',
-      `seatlock_db_pool_total_connections ${pool.totalCount}`,
-      '',
-      '# HELP seatlock_db_pool_idle_connections Idle connections in pool.',
-      '# TYPE seatlock_db_pool_idle_connections gauge',
-      `seatlock_db_pool_idle_connections ${pool.idleCount}`,
-      '',
-      '# HELP seatlock_db_pool_waiting_requests Client queries waiting for a connection.',
-      '# TYPE seatlock_db_pool_waiting_requests gauge',
-      `seatlock_db_pool_waiting_requests ${pool.waitingCount}`,
-      '',
-      '# HELP seatlock_active_holds_total Number of currently active non-expired seat holds.',
-      '# TYPE seatlock_active_holds_total gauge',
-      `seatlock_active_holds_total ${activeHolds}`,
-      '',
-    ].join('\n');
-
-    res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-    res.send(metrics);
-  } catch (err: unknown) {
-    res.status(500).send(`# Error generating metrics: ${(err instanceof Error ? err.message : String(err))}`);
-  }
-});
+app.get('/metrics', createMetricsHandler());
 
 // Mount modular routes with security rate limiting
 const authLimiter = createRateLimiter({
